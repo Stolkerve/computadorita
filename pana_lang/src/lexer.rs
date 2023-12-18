@@ -277,11 +277,7 @@ impl Lexer {
                 string = string.replace("\\n", "\n");
                 string = string.replace("\\t", "\t");
                 string = string.replace("\\r", "\r");
-                return Token::new(
-                    TokenType::String(string),
-                    self.line,
-                    self.col,
-                );
+                return Token::new(TokenType::String(string), self.line, self.col);
             }
             end += 1;
         }

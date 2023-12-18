@@ -96,9 +96,7 @@ impl Evaluator {
     ) -> Result<BlockStatement, ()> {
         for (i, stmt) in statements.iter().enumerate() {
             match stmt {
-                Statement::Fn {
-                    name, body, ..
-                } => {
+                Statement::Fn { name, body, .. } => {
                     if name == "Bucle" {
                         let body = body.clone();
 
@@ -136,12 +134,12 @@ impl Evaluator {
                         }
                         ResultObj::Copy(Object::Break) => return res_obj,
                         ResultObj::Copy(Object::Continue) => return ResultObj::Copy(Object::Void),
-                        _ => {},
+                        _ => {}
                     };
                 }
                 ResultObj::Copy(Object::Void)
             }
-        }
+        };
     }
 
     fn eval_statement(&mut self, stmt: &Statement, env: &RcEnvironment) -> ResultObj {
@@ -611,7 +609,6 @@ impl Evaluator {
     fn set_var(&mut self, left: &Expression, right: &Expression, env: &RcEnvironment) -> ResultObj {
         return match &left.r#type {
             ExprType::Identifier(ident) => {
-
                 if !self.exist_var(ident, env) {
                     return ResultObj::Copy(Object::Error(create_msg_err(
                         format!("El no existe referencias hacia `{}`", ident),
