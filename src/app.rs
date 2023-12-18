@@ -1,6 +1,6 @@
-use std::f32::consts::TAU;
+use std::{cell::RefCell, rc::Rc};
 
-use egui::{text_edit::CursorRange, vec2, Color32, Frame, Margin, Sense, Stroke, Vec2};
+use egui::{text_edit::CursorRange, Frame, Margin, Sense};
 use egui_code_editor::{CodeEditor, ColorTheme, Syntax};
 
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -14,13 +14,23 @@ enum Views {
 pub struct App {
     code: String,
     view: Views,
+    first_run: bool,
+    #[serde(skip)]
+    loop_fn: pana_lang::parser::statement::BlockStatement,
+    #[serde(skip)]
+    environment: pana_lang::eval::environment::RcEnvironment,
 }
 
 impl Default for App {
     fn default() -> Self {
         Self {
-            code: "imprimir(\"Hola mundo\");".into(),
+            code: include_str!("./example.pana").to_string(),
             view: Views::Editor,
+            first_run: false,
+            loop_fn: Vec::default(),
+            environment: Rc::new(RefCell::new(
+                pana_lang::eval::environment::Environment::new(None),
+            )),
         }
     }
 }
@@ -71,28 +81,54 @@ impl App {
     }
 
     fn canvas(&mut self, ui: &mut egui::Ui) {
-        let (response, painter) =
-            ui.allocate_painter(ui.available_size_before_wrap(), Sense::drag());
-        let rect = response.rect;
-        let c = rect.center();
-        let r = rect.width() / 2.0 - 100.0;
-        let color = Color32::from_gray(128);
-        let stroke = Stroke::new(1.0, color);
-        painter.circle_stroke(c, r, stroke);
-        painter.line_segment([c - vec2(0.0, r), c + vec2(0.0, r)], stroke);
-        painter.line_segment([c, c + r * Vec2::angled(TAU * 1.0 / 8.0)], stroke);
-        painter.line_segment([c, c + r * Vec2::angled(TAU * 3.0 / 8.0)], stroke);
-        return;
-        let lexer = pana_lang::lexer::Lexer::new(self.code.chars().collect());
-        let mut parser = pana_lang::parser::Parser::new(lexer);
-        let program = parser.parse();
-        let mut evaluator = pana_lang::eval::evaluator::Evaluator::new();
-        if let Some(error) = parser.error {
-            eprintln!("{}", error);
+        let (response, painter) = ui.allocate_painter(ui.available_size(), Sense::drag());
+        let canvas_rect = response.rect;
+        if self.first_run {
+            let lexer = pana_lang::lexer::Lexer::new(self.code.chars().collect());
+            let mut parser = pana_lang::parser::Parser::new(lexer);
+            let mut program = parser.parse();
+
+            self.loop_fn.clear();
+            self.environment = Rc::new(RefCell::new(
+                pana_lang::eval::environment::Environment::new(None),
+            ));
+
+            let mut evaluator = pana_lang::eval::evaluator::Evaluator::new(
+                None,
+                canvas_rect.width() as u32,
+                canvas_rect.width() as u32,
+                canvas_rect.top() as u32,
+                14,
+            );
+            if let Some(error) = parser.error {
+                eprintln!("{}", error);
+            }
+
+            if let Ok(loop_fn) = evaluator.extract_loop_fn(&mut program) {
+                self.loop_fn = loop_fn;
+            } else {
+                eprintln!("No se encontro la funcion `Bucle`");
+            }
+
+            if let pana_lang::eval::objects::ResultObj::Copy(
+                pana_lang::eval::objects::Object::Error(msg),
+            ) = evaluator.eval_program(&program, &self.environment.clone())
+            {
+                eprintln!("{}", msg);
+            }
+            self.first_run = false;
         }
+
+        let mut evaluator = pana_lang::eval::evaluator::Evaluator::new(
+            Some(painter),
+            canvas_rect.width() as u32,
+            canvas_rect.width() as u32,
+            canvas_rect.top() as u32,
+            14,
+        );
         if let pana_lang::eval::objects::ResultObj::Copy(pana_lang::eval::objects::Object::Error(
             msg,
-        )) = evaluator.eval_program(program)
+        )) = evaluator.eval_program(&self.loop_fn, &self.environment)
         {
             eprintln!("{}", msg);
         }
@@ -109,21 +145,22 @@ impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
-                    match self.view {
-                        Views::Editor => {
-                            if ui.button("Ejecutar").clicked() {
-                                self.view = Views::Canvas;
-                            }
-                        }
-                        Views::Canvas => {
-                            if ui.button("Editar").clicked() {
-                                self.view = Views::Editor;
-                            }
+                match self.view {
+                    Views::Editor => {
+                        if ui.button("Ejecutar").clicked() {
+                            self.view = Views::Canvas;
+                            self.first_run = true;
                         }
                     }
-                    ui.add_space(16.0);
+                    Views::Canvas => {
+                        if ui.button("Codigo").clicked() {
+                            self.view = Views::Editor;
+                        }
+                    }
                 }
-        )});
+                ui.add_space(16.0);
+            })
+        });
 
         egui::CentralPanel::default()
             .frame(Frame::default().inner_margin(Margin::default()))

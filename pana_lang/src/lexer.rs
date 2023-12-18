@@ -1,6 +1,8 @@
-use crate::{types::Numeric, token::{Token, TokenType, keywords_to_tokens}};
+use crate::{
+    token::{keywords_to_tokens, Token, TokenType},
+    types::Numeric,
+};
 use regex::Regex;
-
 
 #[derive(PartialEq)]
 pub enum NumericType {

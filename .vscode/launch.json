@@ -7,25 +7,6 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in library 'computadorita'",
-            "cargo": {
-                "args": [
-                    "test",
-                    "--no-run",
-                    "--lib",
-                    "--package=computadorita"
-                ],
-                "filter": {
-                    "name": "computadorita",
-                    "kind": "lib"
-                }
-            },
-            "args": [],
-            "cwd": "${workspaceFolder}"
-        },
-        {
-            "type": "lldb",
-            "request": "launch",
             "name": "Debug executable 'computadorita'",
             "cargo": {
                 "args": [
@@ -47,8 +28,7 @@
             "name": "Debug unit tests in executable 'computadorita'",
             "cargo": {
                 "args": [
-                    "test",
-                    "--no-run",
+                    "run",
                     "--bin=computadorita",
                     "--package=computadorita"
                 ],

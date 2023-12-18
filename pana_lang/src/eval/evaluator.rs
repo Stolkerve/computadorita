@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::buildins::{
-    internal::{cadena, imprimir, leer, longitud, tipo, InternalFnPointer},
+    internal::{cadena, imprimir, longitud, tipo, InternalFnPointer},
     member::match_member_fn,
 };
 use crate::parser::expression::{ExprType, Expression, FnParams};
@@ -26,22 +26,48 @@ pub enum Context {
     Loop,
 }
 
+#[allow(unused)]
+struct Cursor {
+    width: u32,
+    height: u32,
+    col: u32,
+    row: u32,
+    canvas_top: u32,
+    font_size: u32,
+}
+
+impl Cursor {
+    pub fn new(width: u32, height: u32, canvas_top: u32, font_size: u32) -> Self {
+        Self {
+            width,
+            height,
+            canvas_top,
+            font_size,
+            col: 0,
+            row: 0,
+        }
+    }
+}
+
+#[allow(unused)]
 pub struct Evaluator {
-    environment: RcEnvironment,
+    painter: Option<egui::Painter>,
+    cursor: Cursor,
     buildins_internal_fn: HashMap<String, Box<dyn InternalFnPointer>>,
     stack_ctx: VecDeque<Context>,
 }
 
-impl Default for Evaluator {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl Evaluator {
-    pub fn new() -> Self {
+    pub fn new(
+        painter: Option<egui::Painter>,
+        width: u32,
+        height: u32,
+        canvas_top: u32,
+        font_size: u32,
+    ) -> Self {
         Self {
-            environment: Rc::new(RefCell::new(Environment::new(None))),
+            painter,
+            cursor: Cursor::new(width, height, canvas_top, font_size),
             buildins_internal_fn: HashMap::from([
                 (
                     "longitud".to_owned(),
@@ -56,10 +82,6 @@ impl Evaluator {
                     Box::new(imprimir) as Box<dyn InternalFnPointer>,
                 ),
                 (
-                    "leer".to_owned(),
-                    Box::new(leer) as Box<dyn InternalFnPointer>,
-                ),
-                (
                     "cadena".to_owned(),
                     Box::new(cadena) as Box<dyn InternalFnPointer>,
                 ),
@@ -68,36 +90,61 @@ impl Evaluator {
         }
     }
 
-    pub fn eval_program(&mut self, statements: BlockStatement) -> ResultObj {
-        self.stack_ctx.push_back(Context::Global);
-        self.eval_block_statement(statements, &self.environment.clone())
+    pub fn extract_loop_fn(
+        &mut self,
+        statements: &mut BlockStatement,
+    ) -> Result<BlockStatement, ()> {
+        for (i, stmt) in statements.iter().enumerate() {
+            match stmt {
+                Statement::Fn {
+                    name, body, ..
+                } => {
+                    if name == "Bucle" {
+                        let body = body.clone();
+
+                        statements.remove(i);
+
+                        return Ok(body);
+                    }
+                    return Err(());
+                }
+                _ => {}
+            }
+        }
+
+        return Err(());
     }
 
-    // cambiarlo por un deqvec
-    fn eval_block_statement(
-        &mut self,
-        mut program: BlockStatement,
-        env: &RcEnvironment,
-    ) -> ResultObj {
-        // from https://github.com/Rydgel/monkey-rust/blob/master/lib/evaluator/mod.rs#L332
-        match program.len() {
+    pub fn eval_program(&mut self, statements: &BlockStatement, env: &RcEnvironment) -> ResultObj {
+        self.stack_ctx.clear();
+        self.stack_ctx.push_back(Context::Global);
+        self.eval_block_statement(statements, env)
+    }
+
+    fn eval_block_statement(&mut self, program: &BlockStatement, env: &RcEnvironment) -> ResultObj {
+        return match program.len() {
             // Optimizar con referencias
             0 => ResultObj::Copy(Object::Void),
-            1 => self.eval_statement(program.remove(0), env),
+            1 => self.eval_statement(program.get(0).unwrap(), env),
             _ => {
-                let res_obj = self.eval_statement(program.remove(0), env);
-                match res_obj {
-                    ResultObj::Copy(Object::Return(returned_obj)) => *returned_obj,
-                    ResultObj::Copy(Object::Error(msg)) => ResultObj::Copy(Object::Error(msg)),
-                    ResultObj::Copy(Object::Break) => res_obj,
-                    ResultObj::Copy(Object::Continue) => ResultObj::Copy(Object::Void),
-                    _ => self.eval_block_statement(program, env),
+                for stmt in program.into_iter() {
+                    let res_obj = self.eval_statement(stmt, env);
+                    match res_obj {
+                        ResultObj::Copy(Object::Return(returned_obj)) => return *returned_obj,
+                        ResultObj::Copy(Object::Error(msg)) => {
+                            return ResultObj::Copy(Object::Error(msg))
+                        }
+                        ResultObj::Copy(Object::Break) => return res_obj,
+                        ResultObj::Copy(Object::Continue) => return ResultObj::Copy(Object::Void),
+                        _ => {},
+                    };
                 }
+                ResultObj::Copy(Object::Void)
             }
         }
     }
 
-    fn eval_statement(&mut self, stmt: Statement, env: &RcEnvironment) -> ResultObj {
+    fn eval_statement(&mut self, stmt: &Statement, env: &RcEnvironment) -> ResultObj {
         match stmt {
             Statement::Var { name, value } => self.eval_var(&name, value, env),
             Statement::Return(expr, line, col) => {
@@ -110,8 +157,8 @@ impl Evaluator {
                 }
                 ResultObj::Copy(Object::Error(create_msg_err(
                     "Solo se puede retornar dentro de funciones".into(),
-                    line,
-                    col,
+                    *line,
+                    *col,
                 )))
             }
             Statement::Continue(line, col) => {
@@ -123,8 +170,8 @@ impl Evaluator {
                 }
                 ResultObj::Copy(Object::Error(create_msg_err(
                     "Solo se puede continuar en bucles".into(),
-                    line,
-                    col,
+                    *line,
+                    *col,
                 )))
             }
             Statement::Break(line, col) => {
@@ -136,8 +183,8 @@ impl Evaluator {
                 }
                 ResultObj::Copy(Object::Error(create_msg_err(
                     "Solo se puede romper condicionales y bucles".into(),
-                    line,
-                    col,
+                    *line,
+                    *col,
                 )))
             }
             Statement::Expression(expr) => self.eval_expression(expr, env),
@@ -150,11 +197,11 @@ impl Evaluator {
             } => {
                 let obj = ResultObj::Copy(Object::Fn(Box::new(FnObj {
                     name: name.clone(),
-                    params,
-                    body,
+                    params: params.clone(),
+                    body: body.clone(),
                     env: env.clone(),
                 })));
-                match self.get_var_value(&name, env, line, col) {
+                match self.get_var_value(&name, env, *line, *col) {
                     Some(obj) => obj,
                     None => self.insert_obj(&name, obj, env),
                 }
@@ -162,61 +209,61 @@ impl Evaluator {
         }
     }
 
-    pub fn eval_expression(&mut self, expr: Expression, env: &RcEnvironment) -> ResultObj {
-        match expr.r#type {
-            ExprType::NumericLiteral(numeric) => ResultObj::Copy(Object::Numeric(numeric)),
-            ExprType::BooleanLiteral(b) => ResultObj::Copy(Object::Boolean(b)),
-            ExprType::Prefix { operator, right } => self.eval_prefix(operator, *right, env),
+    pub fn eval_expression(&mut self, expr: &Expression, env: &RcEnvironment) -> ResultObj {
+        match &expr.r#type {
+            ExprType::NumericLiteral(numeric) => ResultObj::Copy(Object::Numeric(numeric.clone())),
+            ExprType::BooleanLiteral(b) => ResultObj::Copy(Object::Boolean(b.clone())),
+            ExprType::Prefix { operator, right } => self.eval_prefix(operator, right, env),
             ExprType::Infix {
                 left,
                 right,
                 operator,
-            } => self.eval_infix(operator, *left, *right, env),
+            } => self.eval_infix(operator, left, right, env),
             ExprType::If {
                 condition,
                 consequence,
                 alternative,
-            } => self.eval_if(*condition, consequence, alternative, env),
+            } => self.eval_if(condition, consequence, alternative, env),
             ExprType::Identifier(ident) => self.eval_identifier(ident, env, expr.line, expr.col),
             ExprType::FnLiteral { params, body } => {
                 ResultObj::Copy(Object::FnExpr(Box::new(FnExprObj {
-                    params,
-                    body,
+                    params: params.clone(),
+                    body: body.clone(),
                     env: env.clone(),
                 })))
             }
             ExprType::Call {
                 function,
                 arguments,
-            } => self.eval_call(*function, arguments, env),
-            ExprType::Assignment { left, right } => self.set_var(*left, *right, env),
+            } => self.eval_call(function, arguments, env),
+            ExprType::Assignment { left, right } => self.set_var(left, right, env),
             ExprType::StringLiteral(string) => {
-                ResultObj::Ref(new_rc_object(Object::String(string)))
+                ResultObj::Ref(new_rc_object(Object::String(string.to_string())))
             }
             ExprType::ListLiteral { elements } => self.eval_list_literal(elements, env),
             ExprType::Index { left, index } => {
-                self.eval_index_expression(*left, *index, None, env).clone()
+                self.eval_index_expression(left, index, None, env).clone()
             }
             ExprType::NullLiteral => ResultObj::Copy(Object::Null),
             ExprType::DictionaryLiteral { pairs } => self.eval_dictionary_expression(pairs, env),
-            ExprType::While { condition, body } => self.eval_while_loop(*condition, body, env),
+            ExprType::While { condition, body } => self.eval_while_loop(condition, body, env),
             ExprType::ForRange {
                 ident,
                 arguments,
                 body,
-            } => self.eval_for_range(ident, arguments, body, expr.line, expr.col, env),
+            } => self.eval_for_range(ident.clone(), &arguments, &body, expr.line, expr.col, env),
         }
     }
 
     fn eval_if(
         &mut self,
-        condition: Expression,
-        consequence: BlockStatement,
-        alternative: BlockStatement,
+        condition: &Expression,
+        consequence: &BlockStatement,
+        alternative: &BlockStatement,
         env: &RcEnvironment,
     ) -> ResultObj {
         self.stack_ctx.push_back(Context::If);
-        let condition = self.eval_expression(condition, env);
+        let condition = self.eval_expression(&condition, env);
         let condition_res = {
             match condition {
                 ResultObj::Copy(Object::Numeric(numeric)) => numeric != Numeric::Int(0),
@@ -229,9 +276,9 @@ impl Evaluator {
         };
         let scope_env = Rc::new(RefCell::new(Environment::new(Some(env.clone()))));
         if condition_res {
-            return self.eval_block_statement(consequence, &scope_env);
+            return self.eval_block_statement(&consequence, &scope_env);
         }
-        let obj = self.eval_block_statement(alternative, &scope_env);
+        let obj = self.eval_block_statement(&alternative, &scope_env);
         if let Some(Context::If) = self.stack_ctx.back() {
             self.stack_ctx.pop_back();
         }
@@ -240,11 +287,11 @@ impl Evaluator {
 
     fn eval_prefix(
         &mut self,
-        operator: TokenType,
-        right: Expression,
+        operator: &TokenType,
+        right: &Expression,
         env: &RcEnvironment,
     ) -> ResultObj {
-        let right = self.eval_expression(right, env);
+        let right = self.eval_expression(&right, env);
         match operator {
             TokenType::Plus => right,
             TokenType::Minus => match right {
@@ -270,24 +317,24 @@ impl Evaluator {
 
     fn match_infix_ops(
         &mut self,
-        left: ResultObj,
-        right: ResultObj,
-        operator: TokenType,
+        left: &ResultObj,
+        right: &ResultObj,
+        operator: &TokenType,
     ) -> ResultObj {
         match (left, right) {
             (ResultObj::Copy(Object::Numeric(a)), ResultObj::Copy(Object::Numeric(b))) => {
                 self.eval_infix_numeric_operation(a, b, operator)
             }
             (ResultObj::Copy(Object::Numeric(a)), ResultObj::Copy(Object::Boolean(b))) => {
-                self.eval_infix_numeric_operation(a, Numeric::Int(b as i64), operator)
+                self.eval_infix_numeric_operation(a, &Numeric::Int(*b as i64), operator)
             }
             (ResultObj::Copy(Object::Boolean(a)), ResultObj::Copy(Object::Numeric(b))) => {
-                self.eval_infix_numeric_operation(Numeric::Int(a as i64), b, operator)
+                self.eval_infix_numeric_operation(&Numeric::Int(*a as i64), b, operator)
             }
             (ResultObj::Copy(Object::Boolean(a)), ResultObj::Copy(Object::Boolean(b))) => self
                 .eval_infix_numeric_operation(
-                    Numeric::Int(a as i64),
-                    Numeric::Int(b as i64),
+                    &Numeric::Int(*a as i64),
+                    &Numeric::Int(*b as i64),
                     operator,
                 ),
             // (ResultObj::Copy(Object::String(a)), ResultObj::Copy(Object::Numeric(b))) => {
@@ -316,32 +363,36 @@ impl Evaluator {
                 _ => panic!("Ok, no se ocurre como llamar este error."),
             },
 
-            (ResultObj::Copy(Object::Return(a)), ResultObj::Ref(b)) => match (&*b.borrow(), *a) {
-                (Object::List(b), ResultObj::Copy(Object::Numeric(a))) => {
-                    self.eval_infix_list_int_operation(b, a, operator)
-                }
-                (Object::List(b), ResultObj::Ref(a)) => {
-                    if let Object::List(a) = &*a.borrow() {
-                        self.eval_infix_list_operation(a, b, operator)
-                    } else {
-                        panic!("Ok, no se ocurre como llamar este error.")
+            (ResultObj::Copy(Object::Return(a)), ResultObj::Ref(b)) => {
+                match (&*b.borrow(), a.as_ref()) {
+                    (Object::List(b), ResultObj::Copy(Object::Numeric(a))) => {
+                        self.eval_infix_list_int_operation(b, a, operator)
                     }
-                }
-                _ => panic!("Ok, no se ocurre como llamar este error."),
-            },
-            (ResultObj::Ref(b), ResultObj::Copy(Object::Return(a))) => match (&*b.borrow(), *a) {
-                (Object::List(b), ResultObj::Copy(Object::Numeric(a))) => {
-                    self.eval_infix_list_int_operation(b, a, operator)
-                }
-                (Object::List(b), ResultObj::Ref(a)) => {
-                    if let Object::List(a) = &*a.borrow() {
-                        self.eval_infix_list_operation(b, a, operator)
-                    } else {
-                        panic!("Ok, no se ocurre como llamar este error.")
+                    (Object::List(b), ResultObj::Ref(a)) => {
+                        if let Object::List(a) = &*a.borrow() {
+                            self.eval_infix_list_operation(a, b, operator)
+                        } else {
+                            panic!("Ok, no se ocurre como llamar este error.")
+                        }
                     }
+                    _ => panic!("Ok, no se ocurre como llamar este error."),
                 }
-                _ => panic!("Ok, no se ocurre como llamar este error."),
-            },
+            }
+            (ResultObj::Ref(b), ResultObj::Copy(Object::Return(a))) => {
+                match (&*b.borrow(), a.as_ref()) {
+                    (Object::List(b), ResultObj::Copy(Object::Numeric(a))) => {
+                        self.eval_infix_list_int_operation(b, a, operator)
+                    }
+                    (Object::List(b), ResultObj::Ref(a)) => {
+                        if let Object::List(a) = &*a.borrow() {
+                            self.eval_infix_list_operation(b, a, operator)
+                        } else {
+                            panic!("Ok, no se ocurre como llamar este error.")
+                        }
+                    }
+                    _ => panic!("Ok, no se ocurre como llamar este error."),
+                }
+            }
             (ResultObj::Copy(Object::Error(msg)), _) => {
                 ResultObj::Copy(Object::Error("^".to_string() + &msg))
             }
@@ -353,8 +404,8 @@ impl Evaluator {
             }
             (ResultObj::Copy(Object::Null), _) => self.eval_infix_null_object_operation(operator),
             (_, ResultObj::Copy(Object::Null)) => self.eval_infix_null_object_operation(operator),
-            (ResultObj::Copy(Object::Return(a)), b) => self.match_infix_ops(*a, b, operator),
-            (a, ResultObj::Copy(Object::Return(b))) => self.match_infix_ops(a, *b, operator),
+            (ResultObj::Copy(Object::Return(a)), b) => self.match_infix_ops(a, b, operator),
+            (a, ResultObj::Copy(Object::Return(b))) => self.match_infix_ops(a, b, operator),
             (a, b) => ResultObj::Copy(Object::Error(format!(
                 "No se soporta operaciones {} {} {}",
                 self.get_type(&a),
@@ -366,22 +417,31 @@ impl Evaluator {
 
     fn eval_member_ops(
         &mut self,
-        right: Expression,
-        left: ResultObj,
+        right: &Expression,
+        left: &ResultObj,
         left_line: usize,
         left_col: usize,
         env: &RcEnvironment,
     ) -> ResultObj {
-        match right.r#type {
+        match &right.r#type {
             ExprType::Call {
                 function,
                 arguments,
-            } => match function.r#type {
+            } => match &function.r#type {
                 ExprType::Identifier(identifier) => {
                     if self.is_error(&left) {
-                        return left;
+                        return left.clone();
                     }
-                    match_member_fn(self, identifier, arguments, left, left_line, left_col, env)
+                    // TODO: Eliminar el clone
+                    match_member_fn(
+                        self,
+                        identifier,
+                        arguments.clone(),
+                        left.clone(),
+                        left_line,
+                        left_col,
+                        env,
+                    )
                 }
                 _ => ResultObj::Copy(Object::Error(create_msg_err(
                     "El operador de acceso de miembro espera un identicador o llamada".into(),
@@ -402,23 +462,23 @@ impl Evaluator {
 
     fn eval_infix(
         &mut self,
-        operator: TokenType,
-        left: Expression,
-        right: Expression,
+        operator: &TokenType,
+        left: &Expression,
+        right: &Expression,
         env: &RcEnvironment,
     ) -> ResultObj {
         let line = left.line;
         let col = left.col;
-        let left = self.eval_expression(left, env);
+        let left = self.eval_expression(&left, env);
 
-        if operator == TokenType::Dot {
-            return self.eval_member_ops(right, left, line, col, env);
+        if *operator == TokenType::Dot {
+            return self.eval_member_ops(right, &left, line, col, env);
         }
 
-        let right = self.eval_expression(right, env);
+        let right = self.eval_expression(&right, env);
 
         // match err
-        match self.match_infix_ops(left, right, operator) {
+        match self.match_infix_ops(&left, &right, operator) {
             ResultObj::Copy(Object::Error(err)) => {
                 ResultObj::Copy(Object::Error(create_msg_err(err, line, col)))
             }
@@ -433,8 +493,10 @@ impl Evaluator {
         }
     }
 
-    fn eval_infix_numeric_operation(&self, a: Numeric, b: Numeric, op: TokenType) -> ResultObj {
+    fn eval_infix_numeric_operation(&self, a: &Numeric, b: &Numeric, op: &TokenType) -> ResultObj {
         // TODO: Hay que ver si hay overflow!!! y mandar un mensaje de error adecuado
+        let a = a.clone();
+        let b = b.clone();
         match op {
             TokenType::Plus => ResultObj::Copy(Object::Numeric(a + b)),
             TokenType::Minus => ResultObj::Copy(Object::Numeric(a - b)),
@@ -451,7 +513,7 @@ impl Evaluator {
         }
     }
 
-    fn eval_infix_string_operation(&self, a: &String, b: &String, op: TokenType) -> ResultObj {
+    fn eval_infix_string_operation(&self, a: &String, b: &String, op: &TokenType) -> ResultObj {
         match op {
             TokenType::Plus => ResultObj::Ref(new_rc_object(Object::String(format!("{}{}", a, b)))),
             TokenType::Eq => ResultObj::Copy(Object::Boolean(a == b)),
@@ -460,11 +522,11 @@ impl Evaluator {
         }
     }
 
-    fn eval_infix_string_int_operation(&self, a: &str, b: Numeric, op: TokenType) -> ResultObj {
+    fn eval_infix_string_int_operation(&self, a: &str, b: &Numeric, op: &TokenType) -> ResultObj {
         if let Numeric::Int(int) = b {
             return match op {
                 TokenType::Asterisk => {
-                    ResultObj::Ref(new_rc_object(Object::String(a.repeat(int as usize))))
+                    ResultObj::Ref(new_rc_object(Object::String(a.repeat(*int as usize))))
                 }
                 _ => ResultObj::Copy(Object::Null),
             };
@@ -478,7 +540,7 @@ impl Evaluator {
         &self,
         a: &Vec<ResultObj>,
         b: &Vec<ResultObj>,
-        op: TokenType,
+        op: &TokenType,
     ) -> ResultObj {
         match op {
             TokenType::Plus => ResultObj::Ref(new_rc_object(Object::List(
@@ -497,15 +559,15 @@ impl Evaluator {
     fn eval_infix_list_int_operation(
         &self,
         a: &Vec<ResultObj>,
-        b: Numeric,
-        op: TokenType,
+        b: &Numeric,
+        op: &TokenType,
     ) -> ResultObj {
         if let Numeric::Int(int) = b {
             match op {
                 TokenType::Asterisk => {
                     let mut objs = Vec::new();
-                    objs.reserve(int as usize);
-                    for _ in 0..int {
+                    objs.reserve(*int as usize);
+                    for _ in 0..*int {
                         objs.extend(a.to_owned());
                     }
                     return ResultObj::Ref(new_rc_object(Object::List(objs)));
@@ -518,7 +580,7 @@ impl Evaluator {
         ))
     }
 
-    fn eval_infix_null_operation(&self, operator: TokenType) -> ResultObj {
+    fn eval_infix_null_operation(&self, operator: &TokenType) -> ResultObj {
         match operator {
             TokenType::Eq => ResultObj::Copy(Object::Boolean(true)),
             TokenType::NotEq => ResultObj::Copy(Object::Boolean(false)),
@@ -528,7 +590,7 @@ impl Evaluator {
         }
     }
 
-    fn eval_infix_null_object_operation(&self, operator: TokenType) -> ResultObj {
+    fn eval_infix_null_object_operation(&self, operator: &TokenType) -> ResultObj {
         match operator {
             TokenType::Eq => ResultObj::Copy(Object::Boolean(false)),
             TokenType::NotEq => ResultObj::Copy(Object::Boolean(true)),
@@ -538,7 +600,7 @@ impl Evaluator {
         }
     }
 
-    fn eval_var(&mut self, name: &String, value: Expression, env: &RcEnvironment) -> ResultObj {
+    fn eval_var(&mut self, name: &String, value: &Expression, env: &RcEnvironment) -> ResultObj {
         if let Some(obj) = self.get_var_value(name, env, value.line, value.col) {
             return obj;
         }
@@ -546,9 +608,10 @@ impl Evaluator {
         self.insert_var(name, value, env)
     }
 
-    fn set_var(&mut self, left: Expression, right: Expression, env: &RcEnvironment) -> ResultObj {
+    fn set_var(&mut self, left: &Expression, right: &Expression, env: &RcEnvironment) -> ResultObj {
         return match &left.r#type {
             ExprType::Identifier(ident) => {
+
                 if !self.exist_var(ident, env) {
                     return ResultObj::Copy(Object::Error(create_msg_err(
                         format!("El no existe referencias hacia `{}`", ident),
@@ -557,24 +620,19 @@ impl Evaluator {
                     )));
                 }
 
-                let obj = self.eval_expression(right, env);
+                let obj = self.eval_expression(&right, env);
                 let mut env_ref = RefCell::borrow_mut(env);
 
                 env_ref.update(ident, obj.clone());
                 obj
             }
             ExprType::Index { left, index } => {
-                let right_obj = self.eval_expression(right, env);
+                let right_obj = self.eval_expression(&right, env);
                 if self.is_error(&right_obj) {
                     return right_obj;
                 }
 
-                self.eval_index_expression(
-                    *left.to_owned(),
-                    *index.to_owned(),
-                    Some(right_obj),
-                    env,
-                )
+                self.eval_index_expression(left, index, Some(&right_obj), env)
             }
             _ => ResultObj::Copy(Object::Error(create_msg_err(
                 format!(
@@ -609,7 +667,7 @@ impl Evaluator {
         env_ref.exist(name)
     }
 
-    fn insert_var(&mut self, name: &str, value: Expression, env: &RcEnvironment) -> ResultObj {
+    fn insert_var(&mut self, name: &str, value: &Expression, env: &RcEnvironment) -> ResultObj {
         let line = value.line;
         let col = value.col;
         let mut value_obj = self.eval_expression(value, env);
@@ -638,7 +696,7 @@ impl Evaluator {
 
     fn eval_identifier(
         &mut self,
-        ident: String,
+        ident: &String,
         env: &RcEnvironment,
         line: usize,
         col: usize,
@@ -646,9 +704,9 @@ impl Evaluator {
         match env.borrow().get(&ident) {
             Some(obj) => obj,
             None => {
-                if let Some(func) = self.buildins_internal_fn.get(&ident) {
+                if let Some(func) = self.buildins_internal_fn.get(ident) {
                     return ResultObj::Copy(Object::BuildinFn(Box::new(BuildinFnObj {
-                        name: ident,
+                        name: ident.clone(),
                         func: func.clone_box(),
                     })));
                 }
@@ -663,33 +721,33 @@ impl Evaluator {
 
     pub fn eval_call(
         &mut self,
-        function: Expression,
-        arguments: Vec<Expression>,
+        function: &Expression,
+        arguments: &Vec<Expression>,
         env: &RcEnvironment,
     ) -> ResultObj {
         let line = function.line;
         let col = function.col;
-        let obj = self.eval_expression(function, env);
+        let obj = self.eval_expression(&function, env);
         match obj {
             ResultObj::Copy(Object::FnExpr(fn_expr)) => self.eval_fn_expr(
                 arguments,
-                fn_expr.params,
-                fn_expr.body,
+                &fn_expr.params,
+                &fn_expr.body,
                 &fn_expr.env,
                 line,
                 col,
             ),
             ResultObj::Copy(Object::Fn(fn_expr)) => self.eval_fn_expr(
                 arguments,
-                fn_expr.params,
-                fn_expr.body,
+                &fn_expr.params,
+                &fn_expr.body,
                 &fn_expr.env,
                 line,
                 col,
             ),
             ResultObj::Copy(Object::BuildinFn(f)) => {
                 let func = f.func;
-                func(self, arguments, env)
+                func(self, arguments.clone(), env)
             }
             // TODO(Retornar errores previo)
             _ => ResultObj::Copy(Object::Error(create_msg_err(
@@ -703,9 +761,9 @@ impl Evaluator {
 
     pub fn eval_fn_expr(
         &mut self,
-        arguments: FnParams,
-        params: FnParams,
-        body: BlockStatement,
+        arguments: &FnParams,
+        params: &FnParams,
+        body: &BlockStatement,
         env: &RcEnvironment,
         line: usize,
         col: usize,
@@ -724,21 +782,21 @@ impl Evaluator {
             )));
         }
         for (arg, param) in arguments.iter().zip(params) {
-            if let ExprType::Identifier(param_name) = param.r#type {
-                self.insert_var(&param_name, arg.clone(), &scope_env);
+            if let ExprType::Identifier(param_name) = &param.r#type {
+                self.insert_var(&param_name, arg, &scope_env);
             }
         }
-        let res_obj = self.eval_block_statement(body, &scope_env);
+        let res_obj = self.eval_block_statement(&body, &scope_env);
         if let Some(Context::Fn) = self.stack_ctx.back() {
             self.stack_ctx.pop_back();
         }
         res_obj
     }
 
-    fn eval_list_literal(&mut self, elements: Vec<Expression>, env: &RcEnvironment) -> ResultObj {
+    fn eval_list_literal(&mut self, elements: &Vec<Expression>, env: &RcEnvironment) -> ResultObj {
         let mut objs = Vec::new();
         for expr in elements {
-            let obj = self.eval_expression(expr, env);
+            let obj = self.eval_expression(&expr, env);
             if self.is_error(&obj) {
                 return obj;
             }
@@ -749,17 +807,17 @@ impl Evaluator {
 
     fn eval_index_expression(
         &mut self,
-        left: Expression,
-        index: Expression,
-        new_value: Option<ResultObj>,
+        left: &Expression,
+        index: &Expression,
+        new_value: Option<&ResultObj>,
         env: &RcEnvironment,
     ) -> ResultObj {
         let line = left.line;
         let col = left.col;
         let index_line = index.line;
         let index_col = index.col;
-        let left_obj = self.eval_expression(left, env);
-        let index_obj = self.eval_expression(index, env);
+        let left_obj = self.eval_expression(&left, env);
+        let index_obj = self.eval_expression(&index, env);
         if self.is_error(&index_obj) {
             return index_obj;
         }
@@ -779,7 +837,7 @@ impl Evaluator {
                         if let Some(new_value) = new_value {
                             if (index as usize) < objs.len() {
                                 objs[index as usize] = new_value.clone();
-                                return new_value;
+                                return new_value.clone();
                             }
                             return ResultObj::Copy(Object::Null);
                         }
@@ -814,16 +872,16 @@ impl Evaluator {
 
     fn eval_dictionary_expression(
         &mut self,
-        expr_pairs: HashMap<Expression, Expression>,
+        expr_pairs: &HashMap<Expression, Expression>,
         env: &RcEnvironment,
     ) -> ResultObj {
         let mut pairs = HashMap::new();
         for (k, v) in expr_pairs {
-            let obj_key = self.eval_expression(k, env);
+            let obj_key = self.eval_expression(&k, env);
             if self.is_error(&obj_key) {
                 return obj_key;
             }
-            let obj_value = self.eval_expression(v, env);
+            let obj_value = self.eval_expression(&v, env);
             if self.is_error(&obj_value) {
                 return obj_value;
             }
@@ -841,13 +899,13 @@ impl Evaluator {
 
     fn eval_while_loop(
         &mut self,
-        condition: Expression,
-        body: BlockStatement,
+        condition: &Expression,
+        body: &BlockStatement,
         env: &RcEnvironment,
     ) -> ResultObj {
         self.stack_ctx.push_back(Context::Loop);
         let condition_ref = Rc::new(RefCell::new(condition));
-        let condition_obj = self.eval_expression(condition_ref.borrow().clone(), env);
+        let condition_obj = self.eval_expression(&condition_ref.borrow(), env);
         let mut condition_res = {
             match condition_obj {
                 ResultObj::Copy(Object::Numeric(numeric)) => numeric != Numeric::Int(0),
@@ -861,7 +919,7 @@ impl Evaluator {
         let body = Box::new(body);
         while condition_res {
             let scope_env = Rc::new(RefCell::new(Environment::new(Some(env.clone()))));
-            let res_obj = self.eval_block_statement(*body.clone(), &scope_env);
+            let res_obj = self.eval_block_statement(&body, &scope_env);
             if self.is_error(&res_obj) {
                 return res_obj;
             }
@@ -872,7 +930,7 @@ impl Evaluator {
                     _ => {}
                 }
             }
-            let condition_obj = self.eval_expression(condition_ref.borrow().clone(), env);
+            let condition_obj = self.eval_expression(&condition_ref.borrow(), env);
             condition_res = {
                 match condition_obj {
                     ResultObj::Copy(Object::Numeric(numeric)) => numeric != Numeric::Int(0),
@@ -892,7 +950,7 @@ impl Evaluator {
 
     fn extract_numeric_int(
         &mut self,
-        expr: Expression,
+        expr: &Expression,
         env: &RcEnvironment,
     ) -> Result<i64, ResultObj> {
         let line = expr.line;
@@ -927,8 +985,8 @@ impl Evaluator {
     fn eval_for_range(
         &mut self,
         ident: String,
-        mut arguments: Vec<Expression>,
-        body: Vec<Statement>,
+        arguments: &Vec<Expression>,
+        body: &Vec<Statement>,
         mut line: usize,
         mut col: usize,
         env: &RcEnvironment,
@@ -947,46 +1005,46 @@ impl Evaluator {
         let mut steps: i64 = 1;
         match arguments.len() {
             1 => {
-                let expr = arguments.remove(0);
+                let expr = arguments.get(0).unwrap();
                 line = expr.line;
                 col = expr.col;
-                iter_obj = self.eval_expression(expr, env);
+                iter_obj = self.eval_expression(&expr, env);
                 if self.is_error(&iter_obj) {
                     return iter_obj;
                 }
             }
             2 => {
-                let expr = arguments.remove(0);
+                let expr = arguments.get(0).unwrap();
                 line = expr.line;
                 col = expr.col;
-                iter_obj = self.eval_expression(expr, env);
+                iter_obj = self.eval_expression(&expr, env);
                 if self.is_error(&iter_obj) {
                     return iter_obj;
                 }
 
-                let expr = arguments.remove(0);
-                match self.extract_numeric_int(expr, env) {
+                let expr = arguments.get(1).unwrap();
+                match self.extract_numeric_int(&expr, env) {
                     Ok(int) => end = int,
                     Err(res_obj) => return res_obj,
                 }
             }
             3 => {
-                let expr = arguments.remove(0);
+                let expr = arguments.get(0).unwrap();
                 line = expr.line;
                 col = expr.col;
-                iter_obj = self.eval_expression(expr, env);
+                iter_obj = self.eval_expression(&expr, env);
                 if self.is_error(&iter_obj) {
                     return iter_obj;
                 }
 
-                let expr = arguments.remove(0);
-                match self.extract_numeric_int(expr, env) {
+                let expr = arguments.get(1).unwrap();
+                match self.extract_numeric_int(&expr, env) {
                     Ok(int) => end = int,
                     Err(res_obj) => return res_obj,
                 }
 
-                let expr = arguments.remove(0);
-                match self.extract_numeric_int(expr, env) {
+                let expr = arguments.get(2).unwrap();
+                match self.extract_numeric_int(&expr, env) {
                     Ok(int) => steps = int,
                     Err(res_obj) => return res_obj,
                 }
@@ -1013,8 +1071,6 @@ impl Evaluator {
             )));
         }
 
-        // let body = Rc::new(RefCell::new(body));
-        let body = Box::new(body);
         match iter_obj {
             ResultObj::Copy(obj) => match obj {
                 Object::Numeric(Numeric::Int(begin)) => {
@@ -1034,7 +1090,7 @@ impl Evaluator {
                         let scope_env = Rc::new(RefCell::new(Environment::new(Some(env.clone()))));
                         let elem_obj = self.eval_var(
                             &ident,
-                            Expression::new(
+                            &Expression::new(
                                 ExprType::NumericLiteral(Numeric::Int(i as i64)),
                                 line,
                                 col + 1,
@@ -1044,7 +1100,7 @@ impl Evaluator {
                         if self.is_error(&elem_obj) {
                             return elem_obj;
                         }
-                        let res_obj = self.eval_block_statement(*body.clone(), &scope_env);
+                        let res_obj = self.eval_block_statement(body, &scope_env);
                         if self.is_error(&res_obj) {
                             return res_obj;
                         }

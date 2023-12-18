@@ -1,5 +1,3 @@
-use std::io::Write;
-
 use crate::eval::{
     environment::RcEnvironment,
     evaluator::Evaluator,
@@ -39,7 +37,7 @@ pub fn longitud(eval: &mut Evaluator, args: FnParams, env: &RcEnvironment) -> Re
             args.len()
         )));
     }
-    let arg_obj = eval.eval_expression(args.get(0).unwrap().clone(), env);
+    let arg_obj = eval.eval_expression(args.get(0).unwrap(), env);
     match arg_obj {
         ResultObj::Copy(obj) => ResultObj::Copy(Object::Error(format!(
             "Se espera un tipo de dato cadena, no {}",
@@ -66,7 +64,7 @@ pub fn imprimir(eval: &mut Evaluator, args: FnParams, env: &RcEnvironment) -> Re
     if !args.is_empty() {
         let objs = args
             .iter()
-            .map(|arg| eval.eval_expression(arg.clone(), env))
+            .map(|arg| eval.eval_expression(arg, env))
             .collect::<Vec<_>>();
         let string = objs
             .iter()
@@ -88,51 +86,12 @@ pub fn tipo(eval: &mut Evaluator, args: FnParams, env: &RcEnvironment) -> Result
             args.len()
         )));
     }
-    let arg_obj = eval.eval_expression(args.get(0).unwrap().clone(), env);
+    let arg_obj = eval.eval_expression(args.get(0).unwrap(), env);
     match arg_obj {
         ResultObj::Copy(obj) => ResultObj::Ref(new_rc_object(Object::String(obj.get_type()))),
         ResultObj::Ref(obj) => {
             ResultObj::Ref(new_rc_object(Object::String(obj.borrow().get_type())))
         }
-    }
-}
-
-// Funcion que permite un input desde el terminal
-pub fn leer(eval: &mut Evaluator, args: FnParams, env: &RcEnvironment) -> ResultObj {
-    match args.len() {
-        0 => {
-            let mut output = String::new();
-            std::io::stdin().read_line(&mut output).unwrap();
-            ResultObj::Ref(new_rc_object(Object::String(output)))
-        }
-        1 => {
-            let arg_obj = eval.eval_expression(args.get(0).unwrap().clone(), env);
-            return match arg_obj {
-                ResultObj::Copy(obj) => ResultObj::Copy(Object::Error(format!(
-                    "Se espera un tipo de dato cadena, no {}",
-                    obj.get_type()
-                ))),
-                ResultObj::Ref(obj) => match &*obj.borrow() {
-                    Object::String(promp) => {
-                        let mut output = String::new();
-                        print!("{}", promp);
-                        std::io::stdout().flush().unwrap();
-                        std::io::stdin().read_line(&mut output).unwrap();
-                        return ResultObj::Ref(new_rc_object(Object::String(
-                            output.trim_end().to_owned(),
-                        )));
-                    }
-                    _ => ResultObj::Copy(Object::Error(format!(
-                        "Se espera un tipo de dato cadena, no {}",
-                        obj.borrow().get_type()
-                    ))),
-                },
-            };
-        }
-        _ => ResultObj::Copy(Object::Error(format!(
-            "Se encontro {} argumentos de 1",
-            args.len()
-        ))),
     }
 }
 
@@ -143,7 +102,7 @@ pub fn cadena(eval: &mut Evaluator, args: FnParams, env: &RcEnvironment) -> Resu
             args.len()
         )));
     }
-    let arg_obj = eval.eval_expression(args.get(0).unwrap().clone(), env);
+    let arg_obj = eval.eval_expression(args.get(0).unwrap(), env);
     match arg_obj {
         ResultObj::Copy(obj) => ResultObj::Ref(new_rc_object(Object::String(obj.to_string()))),
         ResultObj::Ref(obj) => {

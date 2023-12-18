@@ -1647,6 +1647,7 @@ dependencies = [
 name = "pana_lang"
 version = "0.1.0"
 dependencies = [
+ "egui",
  "regex",
 ]
 

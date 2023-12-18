@@ -1,0 +1,12 @@
+var mensaje = "Hola mundo";
+
+mensaje = ">:)";
+imprimir(mensaje);
+
+fn Bucle() {
+    mensaje = ":O";
+    imprimir(mensaje);
+}
+
+mensaje = "*_*";
+imprimir(mensaje);

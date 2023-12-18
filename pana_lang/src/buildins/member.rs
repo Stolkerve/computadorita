@@ -12,14 +12,14 @@ use crate::{
 
 pub fn match_member_fn(
     eval: &mut Evaluator,
-    identifier: String,
+    identifier: &String,
     args: FnParams,
     target: ResultObj,
     target_line: usize,
     target_col: usize,
     env: &RcEnvironment,
 ) -> ResultObj {
-    match identifier.as_ref() {
+    match identifier.as_str() {
         // Mixto
         "eliminar" => eliminar(eval, args, target, target_line, target_col, env),
         "limpiar" => limpiar(args, target, target_line, target_col),
@@ -180,7 +180,7 @@ pub fn eliminar(
     if args.len() != 1 {
         return missmatch_args(1, args.len(), "eliminar".len(), target_line, target_col);
     }
-    let obj_to_remove = eval.eval_expression(args.remove(0), env);
+    let obj_to_remove = eval.eval_expression(&args.remove(0), env);
     if eval.is_error(&obj_to_remove) {
         return obj_to_remove;
     }
@@ -242,7 +242,7 @@ pub fn buscar(
     if args.len() != 1 {
         return missmatch_args(1, args.len(), "buscar".len(), target_line, target_col);
     }
-    let find_obj = eval.eval_expression(args.remove(0), env);
+    let find_obj = eval.eval_expression(&args.remove(0), env);
     if eval.is_error(&find_obj) {
         return find_obj;
     }
@@ -281,11 +281,11 @@ pub fn insertar(
     if args.len() != 2 {
         return missmatch_args(2, args.len(), "insertar".len(), target_line, target_col);
     }
-    let insert_obj = eval.eval_expression(args.remove(0), env);
+    let insert_obj = eval.eval_expression(&args.remove(0), env);
     if eval.is_error(&insert_obj) {
         return insert_obj;
     }
-    let index_obj = eval.eval_expression(args.remove(0), env);
+    let index_obj = eval.eval_expression(&args.remove(0), env);
     if eval.is_error(&index_obj) {
         return index_obj;
     }
@@ -410,7 +410,7 @@ pub fn agregar(
         ResultObj::Copy(obj) => missmatch_type("agregar", &obj.get_type(), target_line, target_col),
         ResultObj::Ref(ref_obj) => match *ref_obj.as_ref().borrow_mut() {
             Object::List(ref mut list) => {
-                let new_obj = eval.eval_expression(args.remove(0), env);
+                let new_obj = eval.eval_expression(&args.remove(0), env);
                 if eval.is_error(&new_obj) {
                     return new_obj;
                 }
@@ -433,7 +433,7 @@ pub fn indice(
     if args.len() != 1 {
         return missmatch_args(1, args.len(), "indice".len(), target_line, target_col);
     }
-    let find_obj = eval.eval_expression(args.remove(0), env);
+    let find_obj = eval.eval_expression(&args.remove(0), env);
     if eval.is_error(&find_obj) {
         return find_obj;
     }
@@ -504,7 +504,7 @@ pub fn concatenar(
     if args.len() != 1 {
         return missmatch_args(1, args.len(), "concatenar".len(), target_line, target_col);
     }
-    let concat_obj = eval.eval_expression(args.remove(0), env);
+    let concat_obj = eval.eval_expression(&args.remove(0), env);
     if eval.is_error(&concat_obj) {
         return concat_obj;
     }
@@ -543,7 +543,7 @@ pub fn eliminar_indice(
     if args.len() != 1 {
         return missmatch_args(1, args.len(), "eliminar".len(), target_line, target_col);
     }
-    let index_to_remove = eval.eval_expression(args.remove(0), env);
+    let index_to_remove = eval.eval_expression(&args.remove(0), env);
     let index;
     if eval.is_error(&index_to_remove) {
         return index_to_remove;
@@ -585,7 +585,7 @@ pub fn juntar(
         return missmatch_args(1, args.len(), "separar".len(), target_line, target_col);
     }
     let join;
-    let join_obj = eval.eval_expression(args.remove(0), env);
+    let join_obj = eval.eval_expression(&args.remove(0), env);
     if eval.is_error(&join_obj) {
         return join_obj;
     }
@@ -676,7 +676,7 @@ pub fn separar(
         return missmatch_args(1, args.len(), "separar".len(), target_line, target_col);
     }
     let split;
-    let split_obj = eval.eval_expression(args.remove(0), env);
+    let split_obj = eval.eval_expression(&args.remove(0), env);
     if eval.is_error(&split_obj) {
         return split_obj;
     }
@@ -725,7 +725,7 @@ pub fn caracter(
     if args.len() != 1 {
         return missmatch_args(1, args.len(), "caracter".len(), target_line, target_col);
     }
-    let index_obj = eval.eval_expression(args.remove(0), env);
+    let index_obj = eval.eval_expression(&args.remove(0), env);
     if eval.is_error(&index_obj) {
         return index_obj;
     }
@@ -878,7 +878,7 @@ pub fn inicia_con(
     if args.len() != 1 {
         return missmatch_args(1, args.len(), "inicia_con".len(), target_line, target_col);
     }
-    let pattern_obj = eval.eval_expression(args.remove(0), env);
+    let pattern_obj = eval.eval_expression(&args.remove(0), env);
     if eval.is_error(&pattern_obj) {
         return pattern_obj;
     }
@@ -921,7 +921,7 @@ pub fn termina_con(
     if args.len() != 1 {
         return missmatch_args(1, args.len(), "termina_con".len(), target_line, target_col);
     }
-    let pattern_obj = eval.eval_expression(args.remove(0), env);
+    let pattern_obj = eval.eval_expression(&args.remove(0), env);
     if eval.is_error(&pattern_obj) {
         return pattern_obj;
     }
@@ -1008,11 +1008,11 @@ pub fn reemplazar(
     if args.len() != 2 {
         return missmatch_args(2, args.len(), "reemplazar".len(), target_line, target_col);
     }
-    let pattern_obj = eval.eval_expression(args.remove(0), env);
+    let pattern_obj = eval.eval_expression(&args.remove(0), env);
     if eval.is_error(&pattern_obj) {
         return pattern_obj;
     }
-    let new_obj = eval.eval_expression(args.remove(0), env);
+    let new_obj = eval.eval_expression(&args.remove(0), env);
     if eval.is_error(&pattern_obj) {
         return pattern_obj;
     }
@@ -1096,11 +1096,11 @@ pub fn subcadena(
     if args.len() != 2 {
         return missmatch_args(2, args.len(), "subcadena".len(), target_line, target_col);
     }
-    let pos_obj = eval.eval_expression(args.remove(0), env);
+    let pos_obj = eval.eval_expression(&args.remove(0), env);
     if eval.is_error(&pos_obj) {
         return pos_obj;
     }
-    let len_obj = eval.eval_expression(args.remove(0), env);
+    let len_obj = eval.eval_expression(&args.remove(0), env);
     if eval.is_error(&len_obj) {
         return len_obj;
     }
