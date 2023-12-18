@@ -273,8 +273,12 @@ impl Lexer {
         while self.current_char != '\0' {
             self.read_char();
             if self.current_char == '"' {
+                let mut string = String::from_iter(self.input[start + 1..end].iter());
+                string = string.replace("\\n", "\n");
+                string = string.replace("\\t", "\t");
+                string = string.replace("\\r", "\r");
                 return Token::new(
-                    TokenType::String(self.input[start + 1..end].iter().collect::<String>()),
+                    TokenType::String(string),
                     self.line,
                     self.col,
                 );

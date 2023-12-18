@@ -1,6 +1,6 @@
 var mensaje = "Hola mundo";
 
-mensaje = ">:)";
+mensaje = ">:)\n";
 imprimir(mensaje);
 
 fn Bucle() {
