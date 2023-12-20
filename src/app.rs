@@ -1,6 +1,6 @@
 use std::{cell::RefCell, rc::Rc, time::Duration};
 
-use egui::{text_edit::CursorRange, Frame, Margin, Sense};
+use egui::{text_edit::CursorRange, Color32, FontId, Frame, Margin, RichText, Sense};
 use egui_code_editor::{CodeEditor, ColorTheme, Syntax};
 
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -21,6 +21,8 @@ pub struct App {
     environment: pana_lang::eval::environment::RcEnvironment,
     #[serde(skip)]
     evaluator: Option<pana_lang::eval::evaluator::Evaluator>,
+    #[serde(skip)]
+    err_msg: String,
 }
 
 impl Default for App {
@@ -34,6 +36,7 @@ impl Default for App {
                 pana_lang::eval::environment::Environment::new(None),
             )),
             evaluator: None,
+            err_msg: String::new(),
         }
     }
 }
@@ -84,6 +87,13 @@ impl App {
     }
 
     fn canvas(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
+        if !self.err_msg.is_empty() {
+            ui.label(
+                RichText::new(&self.err_msg)
+                    .color(Color32::RED)
+                    .font(FontId::proportional(20.0)),
+            );
+        }
         ctx.request_repaint_after(Duration::from_millis(16)); //60fps
         let (response, painter) = ui.allocate_painter(ui.available_size(), Sense::drag());
         let canvas_rect = response.rect;
@@ -105,7 +115,8 @@ impl App {
             ));
 
             if let Some(error) = parser.error {
-                eprintln!("{}", error);
+                self.err_msg = error.to_string();
+                return;
             }
 
             let evaluator = self.evaluator.as_mut().unwrap();
@@ -113,14 +124,16 @@ impl App {
             if let Ok(loop_fn) = evaluator.extract_loop_fn(&mut program) {
                 self.loop_fn = loop_fn;
             } else {
-                eprintln!("No se encontro la funcion `Bucle`");
+                self.err_msg = "No se encontro la funcion `Bucle`".to_string();
+                return;
             }
 
             if let pana_lang::eval::objects::ResultObj::Copy(
                 pana_lang::eval::objects::Object::Error(msg),
             ) = evaluator.eval_program(&program, &self.environment)
             {
-                eprintln!("{}", msg);
+                self.err_msg = msg;
+                return;
             }
             self.first_run = false;
         }
@@ -138,7 +151,7 @@ impl App {
             msg,
         )) = evaluator.eval_program(&self.loop_fn, &env)
         {
-            eprintln!("{}", msg);
+            self.err_msg = msg;
         }
     }
 }
@@ -163,6 +176,7 @@ impl eframe::App for App {
                     Views::Canvas => {
                         if ui.button("Codigo").clicked() {
                             self.view = Views::Editor;
+                            self.err_msg.clear();
                         }
                     }
                 }
