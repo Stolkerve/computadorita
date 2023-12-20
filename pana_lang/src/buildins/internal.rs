@@ -415,7 +415,7 @@ pub fn aleatorio(eval: &mut Evaluator, args: FnParams, env: &RcEnvironment) -> R
                     .unwrap()
                     .as_secs(),
             );
-            return match (min_num, max_num) {
+            match (min_num, max_num) {
                 (Numeric::Int(a), Numeric::Int(b)) => {
                     ResultObj::Copy(Object::Numeric(Numeric::Int(rng.rand_range_i64(a, b))))
                 }
@@ -428,10 +428,10 @@ pub fn aleatorio(eval: &mut Evaluator, args: FnParams, env: &RcEnvironment) -> R
                 (Numeric::Float(a), Numeric::Float(b)) => ResultObj::Copy(Object::Numeric(
                     Numeric::Int(rng.rand_range_i64(a as i64, b as i64)),
                 )),
-            };
+            }
         }
         _ => {
-            return ResultObj::Copy(Object::Error(
+            ResultObj::Copy(Object::Error(
                 "Se espera un tipo de dato numerico".to_string(),
             ))
         }

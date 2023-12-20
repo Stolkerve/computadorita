@@ -13,7 +13,7 @@ impl Rng {
         seed |= random_seed << 24;
         seed |= random_seed << 16;
         seed |= random_seed << 8;
-        seed |= random_seed << 0;
+        seed |= random_seed;
 
         Self {
             state: (
