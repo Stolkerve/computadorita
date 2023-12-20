@@ -536,7 +536,6 @@ impl Parser {
     }
 
     fn parse_identifier(&mut self, ident: String) -> Result<Expression, ParserError> {
-        
         if !matches!(
             self.peek_token.r#type,
             TokenType::Assign
