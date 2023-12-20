@@ -388,7 +388,7 @@ pub fn dibujar_circulo(eval: &mut Evaluator, args: FnParams, env: &RcEnvironment
     let rgba = extract_rgba(color);
     if let Some(painter) = eval.painter.as_mut() {
         painter.circle_filled(
-            egui::Pos2::new(pos_x, pos_y),
+            egui::Pos2::new(pos_x, pos_y + eval.canvas.top),
             radius,
             egui::Color32::from_rgba_unmultiplied(rgba.0, rgba.1, rgba.2, rgba.3),
         );
@@ -430,10 +430,30 @@ pub fn aleatorio(eval: &mut Evaluator, args: FnParams, env: &RcEnvironment) -> R
                 )),
             }
         }
-        _ => {
-            ResultObj::Copy(Object::Error(
-                "Se espera un tipo de dato numerico".to_string(),
-            ))
-        }
+        _ => ResultObj::Copy(Object::Error(
+            "Se espera un tipo de dato numerico".to_string(),
+        )),
     }
+}
+
+pub fn lienzo_ancho(eval: &mut Evaluator, args: FnParams, _env: &RcEnvironment) -> ResultObj {
+    if !args.is_empty() {
+        return ResultObj::Copy(Object::Error(format!(
+            "Se encontro {} argumentos de 0",
+            args.len()
+        )));
+    }
+
+    ResultObj::Copy(Object::Numeric(Numeric::Float(eval.canvas.width as f64)))
+}
+
+pub fn lienzo_altura(eval: &mut Evaluator, args: FnParams, _env: &RcEnvironment) -> ResultObj {
+    if !args.is_empty() {
+        return ResultObj::Copy(Object::Error(format!(
+            "Se encontro {} argumentos de 0",
+            args.len()
+        )));
+    }
+
+    ResultObj::Copy(Object::Numeric(Numeric::Float(eval.canvas.height as f64)))
 }

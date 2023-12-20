@@ -128,7 +128,12 @@ impl App {
         let env = Rc::new(RefCell::new(
             pana_lang::eval::environment::Environment::new(Some(self.environment.clone())),
         ));
+
         let evaluator = self.evaluator.as_mut().unwrap();
+        evaluator.canvas.width = canvas_rect.width();
+        evaluator.canvas.height = canvas_rect.height();
+        evaluator.canvas.top = canvas_rect.top();
+
         if let pana_lang::eval::objects::ResultObj::Copy(pana_lang::eval::objects::Object::Error(
             msg,
         )) = evaluator.eval_program(&self.loop_fn, &env)

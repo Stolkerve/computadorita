@@ -7,7 +7,7 @@ use std::{
 use crate::buildins::{
     internal::{
         aleatorio, cadena, dibujar_circulo, dibujar_linea, dibujar_rectangulo, dibujar_texto,
-        longitud, tipo, InternalFnPointer,
+        lienzo_altura, lienzo_ancho, longitud, tipo, InternalFnPointer,
     },
     member::match_member_fn,
 };
@@ -70,6 +70,14 @@ impl Evaluator {
                 (
                     "dibujar_circulo".to_owned(),
                     Box::new(dibujar_circulo) as Box<dyn InternalFnPointer>,
+                ),
+                (
+                    "lienzo_ancho".to_owned(),
+                    Box::new(lienzo_ancho) as Box<dyn InternalFnPointer>,
+                ),
+                (
+                    "lienzo_altura".to_owned(),
+                    Box::new(lienzo_altura) as Box<dyn InternalFnPointer>,
                 ),
                 (
                     "aleatorio".to_owned(),
