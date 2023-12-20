@@ -92,23 +92,21 @@ impl Evaluator {
         }
     }
 
+    #[allow(clippy::result_unit_err)]
     pub fn extract_loop_fn(
         &mut self,
         statements: &mut BlockStatement,
     ) -> Result<BlockStatement, ()> {
         for (i, stmt) in statements.iter().enumerate() {
-            match stmt {
-                Statement::Fn { name, body, .. } => {
-                    if name == "Bucle" {
-                        let body = body.clone();
+            if let Statement::Fn { name, body, .. } = stmt {
+                if name == "Bucle" {
+                    let body = body.clone();
 
-                        statements.remove(i);
+                    statements.remove(i);
 
-                        return Ok(body);
-                    }
-                    return Err(());
+                    return Ok(body);
                 }
-                _ => {}
+                return Err(());
             }
         }
 
@@ -1141,8 +1139,8 @@ impl Evaluator {
 }
 
 pub fn create_msg_err(msg: String, line: usize, col: usize) -> String {
-    if msg.starts_with('^') {
-        return msg[1..].to_string();
+    if let Some(stripped) = msg.strip_prefix('^') {
+        return stripped.to_string();
     }
     format!(
         "Error de ejecución. {}. Linea {}, columna {}.",
