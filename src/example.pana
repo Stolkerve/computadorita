@@ -5,4 +5,5 @@ fn Bucle() {
     dibujar_texto(mensaje + i, 0, 0, 14);
     dibujar_texto(mensaje + i, 0, 14 * 2, 14, 0xFF0000FF);
     dibujar_texto(mensaje + i, 0, 14 * 4, 14, 0xFF0000);
+    dibujar_linea(50, 50, 100, 100);
 }

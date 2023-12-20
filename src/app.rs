@@ -158,7 +158,7 @@ impl eframe::App for App {
                         }
                     }
                 }
-                if ui.button("Manual").clicked() {}
+                let _ = ui.button("Manual");
                 ui.add_space(16.0);
             })
         });
