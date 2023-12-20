@@ -197,7 +197,7 @@ pub fn dibujar_texto(eval: &mut Evaluator, args: FnParams, env: &RcEnvironment) 
         }
         _ => {
             return ResultObj::Copy(Object::Error(
-                format!("Se espera un tipo de dato numerico",),
+                "Se espera un tipo de dato numerico".to_string(),
             ))
         }
     };
@@ -257,7 +257,7 @@ pub fn dibujar_linea(eval: &mut Evaluator, args: FnParams, env: &RcEnvironment) 
         }
         _ => {
             return ResultObj::Copy(Object::Error(
-                format!("Se espera un tipo de dato numerico",),
+                "Se espera un tipo de dato numerico".to_string(),
             ))
         }
     }

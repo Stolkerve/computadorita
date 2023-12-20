@@ -536,7 +536,7 @@ impl Parser {
     }
 
     fn parse_identifier(&mut self, ident: String) -> Result<Expression, ParserError> {
-        let peek_token;
+        
         if !matches!(
             self.peek_token.r#type,
             TokenType::Assign
@@ -552,7 +552,7 @@ impl Parser {
                 self.current_token.col,
             ));
         }
-        peek_token = self.peek_token.r#type.clone();
+        let peek_token = self.peek_token.r#type.clone();
 
         self.next_token();
         self.next_token();

@@ -100,7 +100,7 @@ impl Evaluator {
             }
         }
 
-        return Err(());
+        Err(())
     }
 
     pub fn eval_program(&mut self, statements: &BlockStatement, env: &RcEnvironment) -> ResultObj {
@@ -115,7 +115,7 @@ impl Evaluator {
             0 => ResultObj::Copy(Object::Void),
             1 => self.eval_statement(program.get(0).unwrap(), env),
             _ => {
-                for stmt in program.into_iter() {
+                for stmt in program.iter() {
                     let res_obj = self.eval_statement(stmt, env);
                     match res_obj {
                         ResultObj::Copy(Object::Return(returned_obj)) => return *returned_obj,
@@ -134,7 +134,7 @@ impl Evaluator {
 
     fn eval_statement(&mut self, stmt: &Statement, env: &RcEnvironment) -> ResultObj {
         match stmt {
-            Statement::Var { name, value } => self.eval_var(&name, value, env),
+            Statement::Var { name, value } => self.eval_var(name, value, env),
             Statement::Return(expr, line, col) => {
                 while let Some(ctx) = self.stack_ctx.pop_back() {
                     if let Context::Fn = ctx {
@@ -189,9 +189,9 @@ impl Evaluator {
                     body: body.clone(),
                     env: env.clone(),
                 })));
-                match self.get_var_value(&name, env, *line, *col) {
+                match self.get_var_value(name, env, *line, *col) {
                     Some(obj) => obj,
-                    None => self.insert_obj(&name, obj, env),
+                    None => self.insert_obj(name, obj, env),
                 }
             }
         }
@@ -200,7 +200,7 @@ impl Evaluator {
     pub fn eval_expression(&mut self, expr: &Expression, env: &RcEnvironment) -> ResultObj {
         match &expr.r#type {
             ExprType::NumericLiteral(numeric) => ResultObj::Copy(Object::Numeric(numeric.clone())),
-            ExprType::BooleanLiteral(b) => ResultObj::Copy(Object::Boolean(b.clone())),
+            ExprType::BooleanLiteral(b) => ResultObj::Copy(Object::Boolean(*b)),
             ExprType::Prefix { operator, right } => self.eval_prefix(operator, right, env),
             ExprType::Infix {
                 left,
@@ -239,7 +239,7 @@ impl Evaluator {
                 ident,
                 arguments,
                 body,
-            } => self.eval_for_range(ident.clone(), &arguments, &body, expr.line, expr.col, env),
+            } => self.eval_for_range(ident.clone(), arguments, body, expr.line, expr.col, env),
         }
     }
 
@@ -251,7 +251,7 @@ impl Evaluator {
         env: &RcEnvironment,
     ) -> ResultObj {
         self.stack_ctx.push_back(Context::If);
-        let condition = self.eval_expression(&condition, env);
+        let condition = self.eval_expression(condition, env);
         let condition_res = {
             match condition {
                 ResultObj::Copy(Object::Numeric(numeric)) => numeric != Numeric::Int(0),
@@ -264,9 +264,9 @@ impl Evaluator {
         };
         let scope_env = Rc::new(RefCell::new(Environment::new(Some(env.clone()))));
         if condition_res {
-            return self.eval_block_statement(&consequence, &scope_env);
+            return self.eval_block_statement(consequence, &scope_env);
         }
-        let obj = self.eval_block_statement(&alternative, &scope_env);
+        let obj = self.eval_block_statement(alternative, &scope_env);
         if let Some(Context::If) = self.stack_ctx.back() {
             self.stack_ctx.pop_back();
         }
@@ -279,7 +279,7 @@ impl Evaluator {
         right: &Expression,
         env: &RcEnvironment,
     ) -> ResultObj {
-        let right = self.eval_expression(&right, env);
+        let right = self.eval_expression(right, env);
         match operator {
             TokenType::Plus => right,
             TokenType::Minus => match right {
@@ -376,10 +376,10 @@ impl Evaluator {
                 }
             }
             (ResultObj::Copy(Object::Error(msg)), _) => {
-                ResultObj::Copy(Object::Error("^".to_string() + &msg))
+                ResultObj::Copy(Object::Error("^".to_string() + msg))
             }
             (_, ResultObj::Copy(Object::Error(msg))) => {
-                ResultObj::Copy(Object::Error("^".to_string() + &msg))
+                ResultObj::Copy(Object::Error("^".to_string() + msg))
             }
             (ResultObj::Copy(Object::Null), ResultObj::Copy(Object::Null)) => {
                 self.eval_infix_null_operation(operator)
@@ -390,9 +390,9 @@ impl Evaluator {
             (a, ResultObj::Copy(Object::Return(b))) => self.match_infix_ops(a, b, operator),
             (a, b) => ResultObj::Copy(Object::Error(format!(
                 "No se soporta operaciones {} {} {}",
-                self.get_type(&a),
+                self.get_type(a),
                 operator,
-                self.get_type(&b)
+                self.get_type(b)
             ))),
         }
     }
@@ -411,7 +411,7 @@ impl Evaluator {
                 arguments,
             } => match &function.r#type {
                 ExprType::Identifier(identifier) => {
-                    if self.is_error(&left) {
+                    if self.is_error(left) {
                         return left.clone();
                     }
                     // TODO: Eliminar el clone
@@ -451,13 +451,13 @@ impl Evaluator {
     ) -> ResultObj {
         let line = left.line;
         let col = left.col;
-        let left = self.eval_expression(&left, env);
+        let left = self.eval_expression(left, env);
 
         if *operator == TokenType::Dot {
             return self.eval_member_ops(right, &left, line, col, env);
         }
 
-        let right = self.eval_expression(&right, env);
+        let right = self.eval_expression(right, env);
 
         // match err
         match self.match_infix_ops(&left, &right, operator) {
@@ -604,14 +604,14 @@ impl Evaluator {
                     )));
                 }
 
-                let obj = self.eval_expression(&right, env);
+                let obj = self.eval_expression(right, env);
                 let mut env_ref = RefCell::borrow_mut(env);
 
                 env_ref.update(ident, obj.clone());
                 obj
             }
             ExprType::Index { left, index } => {
-                let right_obj = self.eval_expression(&right, env);
+                let right_obj = self.eval_expression(right, env);
                 if self.is_error(&right_obj) {
                     return right_obj;
                 }
@@ -685,7 +685,7 @@ impl Evaluator {
         line: usize,
         col: usize,
     ) -> ResultObj {
-        match env.borrow().get(&ident) {
+        match env.borrow().get(ident) {
             Some(obj) => obj,
             None => {
                 if let Some(func) = self.buildins_internal_fn.get(ident) {
@@ -711,7 +711,7 @@ impl Evaluator {
     ) -> ResultObj {
         let line = function.line;
         let col = function.col;
-        let obj = self.eval_expression(&function, env);
+        let obj = self.eval_expression(function, env);
         match obj {
             ResultObj::Copy(Object::FnExpr(fn_expr)) => self.eval_fn_expr(
                 arguments,
@@ -767,10 +767,10 @@ impl Evaluator {
         }
         for (arg, param) in arguments.iter().zip(params) {
             if let ExprType::Identifier(param_name) = &param.r#type {
-                self.insert_var(&param_name, arg, &scope_env);
+                self.insert_var(param_name, arg, &scope_env);
             }
         }
-        let res_obj = self.eval_block_statement(&body, &scope_env);
+        let res_obj = self.eval_block_statement(body, &scope_env);
         if let Some(Context::Fn) = self.stack_ctx.back() {
             self.stack_ctx.pop_back();
         }
@@ -780,7 +780,7 @@ impl Evaluator {
     fn eval_list_literal(&mut self, elements: &Vec<Expression>, env: &RcEnvironment) -> ResultObj {
         let mut objs = Vec::new();
         for expr in elements {
-            let obj = self.eval_expression(&expr, env);
+            let obj = self.eval_expression(expr, env);
             if self.is_error(&obj) {
                 return obj;
             }
@@ -800,8 +800,8 @@ impl Evaluator {
         let col = left.col;
         let index_line = index.line;
         let index_col = index.col;
-        let left_obj = self.eval_expression(&left, env);
-        let index_obj = self.eval_expression(&index, env);
+        let left_obj = self.eval_expression(left, env);
+        let index_obj = self.eval_expression(index, env);
         if self.is_error(&index_obj) {
             return index_obj;
         }
@@ -861,11 +861,11 @@ impl Evaluator {
     ) -> ResultObj {
         let mut pairs = HashMap::new();
         for (k, v) in expr_pairs {
-            let obj_key = self.eval_expression(&k, env);
+            let obj_key = self.eval_expression(k, env);
             if self.is_error(&obj_key) {
                 return obj_key;
             }
-            let obj_value = self.eval_expression(&v, env);
+            let obj_value = self.eval_expression(v, env);
             if self.is_error(&obj_value) {
                 return obj_value;
             }
@@ -992,7 +992,7 @@ impl Evaluator {
                 let expr = arguments.get(0).unwrap();
                 line = expr.line;
                 col = expr.col;
-                iter_obj = self.eval_expression(&expr, env);
+                iter_obj = self.eval_expression(expr, env);
                 if self.is_error(&iter_obj) {
                     return iter_obj;
                 }
@@ -1001,13 +1001,13 @@ impl Evaluator {
                 let expr = arguments.get(0).unwrap();
                 line = expr.line;
                 col = expr.col;
-                iter_obj = self.eval_expression(&expr, env);
+                iter_obj = self.eval_expression(expr, env);
                 if self.is_error(&iter_obj) {
                     return iter_obj;
                 }
 
                 let expr = arguments.get(1).unwrap();
-                match self.extract_numeric_int(&expr, env) {
+                match self.extract_numeric_int(expr, env) {
                     Ok(int) => end = int,
                     Err(res_obj) => return res_obj,
                 }
@@ -1016,19 +1016,19 @@ impl Evaluator {
                 let expr = arguments.get(0).unwrap();
                 line = expr.line;
                 col = expr.col;
-                iter_obj = self.eval_expression(&expr, env);
+                iter_obj = self.eval_expression(expr, env);
                 if self.is_error(&iter_obj) {
                     return iter_obj;
                 }
 
                 let expr = arguments.get(1).unwrap();
-                match self.extract_numeric_int(&expr, env) {
+                match self.extract_numeric_int(expr, env) {
                     Ok(int) => end = int,
                     Err(res_obj) => return res_obj,
                 }
 
                 let expr = arguments.get(2).unwrap();
-                match self.extract_numeric_int(&expr, env) {
+                match self.extract_numeric_int(expr, env) {
                     Ok(int) => steps = int,
                     Err(res_obj) => return res_obj,
                 }
@@ -1129,7 +1129,7 @@ impl Evaluator {
 }
 
 pub fn create_msg_err(msg: String, line: usize, col: usize) -> String {
-    if msg.chars().nth(0).unwrap() == '^' {
+    if msg.starts_with('^') {
         return msg[1..].to_string();
     }
     format!(

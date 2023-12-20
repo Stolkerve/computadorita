@@ -163,7 +163,7 @@ fn partition(slice: &mut [ResultObj], low: isize, high: isize) -> Result<isize, 
             slice.swap(store_index as usize, last_index as usize);
         }
     }
-    slice.swap(store_index as usize, pivot as usize);
+    slice.swap(store_index as usize, pivot);
     Ok(store_index)
 }
 
@@ -458,7 +458,7 @@ pub fn ordenar(
     target_col: usize,
     env: &RcEnvironment,
 ) -> ResultObj {
-    if args.len() != 0 {
+    if !args.is_empty() {
         return missmatch_args(0, args.len(), "ordenar".len(), target_line, target_col);
     }
 
@@ -637,7 +637,7 @@ pub fn llaves(
         ResultObj::Copy(obj) => missmatch_type("llaves", &obj.get_type(), target_line, target_col),
         ResultObj::Ref(ref_obj) => match *ref_obj.as_ref().borrow_mut() {
             Object::Dictionary(ref dict) => ResultObj::Ref(new_rc_object(Object::List(
-                dict.keys().clone().map(|obj| obj.clone()).collect(),
+                dict.keys().clone().cloned().collect(),
             ))),
             ref obj => missmatch_type("llaves", &obj.get_type(), target_line, target_col),
         },
@@ -657,7 +657,7 @@ pub fn valores(
         ResultObj::Copy(obj) => missmatch_type("valores", &obj.get_type(), target_line, target_col),
         ResultObj::Ref(ref_obj) => match *ref_obj.as_ref().borrow_mut() {
             Object::Dictionary(ref dict) => ResultObj::Ref(new_rc_object(Object::List(
-                dict.values().map(|obj| obj.clone()).collect(),
+                dict.values().cloned().collect(),
             ))),
             ref obj => missmatch_type("valores", &obj.get_type(), target_line, target_col),
         },
