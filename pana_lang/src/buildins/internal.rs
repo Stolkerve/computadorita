@@ -159,11 +159,11 @@ pub fn dibujar_texto(eval: &mut Evaluator, args: FnParams, env: &RcEnvironment) 
             ResultObj::Copy(Object::Numeric(pos_x_num)),
             ResultObj::Copy(Object::Numeric(pos_y_num)),
             ResultObj::Copy(Object::Numeric(font_size_num)),
-        ) =>  {
+        ) => {
             pos_x = extract_f32_from_numeric(pos_x_num);
             pos_y = extract_f32_from_numeric(pos_y_num);
             font_size = extract_f32_from_numeric(font_size_num);
-        },
+        }
         _ => {
             return ResultObj::Copy(Object::Error(
                 format!("Se espera un tipo de dato numerico",),
@@ -173,7 +173,12 @@ pub fn dibujar_texto(eval: &mut Evaluator, args: FnParams, env: &RcEnvironment) 
 
     // dibujar
     if let Some(painter) = eval.painter.as_mut() {
-        let galley = painter.layout(text, egui::FontId::monospace(font_size), egui::Color32::WHITE, eval.canvas.width);
+        let galley = painter.layout(
+            text,
+            egui::FontId::monospace(font_size),
+            egui::Color32::WHITE,
+            eval.canvas.width,
+        );
         painter.galley(egui::Pos2::new(pos_x, pos_y + eval.canvas.top), galley);
     }
 

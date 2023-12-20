@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::buildins::{
-    internal::{cadena, longitud, tipo, dibujar_texto, InternalFnPointer},
+    internal::{cadena, dibujar_texto, longitud, tipo, InternalFnPointer},
     member::match_member_fn,
 };
 use crate::parser::expression::{ExprType, Expression, FnParams};
@@ -42,7 +42,7 @@ impl Evaluator {
     pub fn new(painter: Option<egui::Painter>, width: f32, height: f32, top: f32) -> Self {
         Self {
             painter,
-            canvas: CanvasSize {width, height, top},
+            canvas: CanvasSize { width, height, top },
             buildins_internal_fn: HashMap::from([
                 (
                     "longitud".to_owned(),
@@ -54,7 +54,7 @@ impl Evaluator {
                 ),
                 (
                     "dibujar_texto".to_owned(),
-                    Box::new(dibujar_texto) as Box<dyn InternalFnPointer>
+                    Box::new(dibujar_texto) as Box<dyn InternalFnPointer>,
                 ),
                 (
                     "cadena".to_owned(),
