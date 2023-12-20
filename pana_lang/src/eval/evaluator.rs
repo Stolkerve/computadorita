@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::buildins::{
-    internal::{cadena, imprimir, longitud, tipo, InternalFnPointer},
+    internal::{cadena, longitud, tipo, dibujar_texto, InternalFnPointer},
     member::match_member_fn,
 };
 use crate::parser::expression::{ExprType, Expression, FnParams};
@@ -17,7 +17,6 @@ use super::{
     objects::{new_rc_object, BuildinFnObj, FnExprObj, FnObj, Object, ResultObj},
 };
 
-#[allow(dead_code)]
 #[derive(PartialEq, Clone, Debug)]
 pub enum Context {
     Global,
@@ -26,48 +25,24 @@ pub enum Context {
     Loop,
 }
 
-#[allow(unused)]
-struct Cursor {
-    width: u32,
-    height: u32,
-    col: u32,
-    row: u32,
-    canvas_top: u32,
-    font_size: u32,
+pub struct CanvasSize {
+    pub top: f32,
+    pub width: f32,
+    pub height: f32,
 }
 
-impl Cursor {
-    pub fn new(width: u32, height: u32, canvas_top: u32, font_size: u32) -> Self {
-        Self {
-            width,
-            height,
-            canvas_top,
-            font_size,
-            col: 0,
-            row: 0,
-        }
-    }
-}
-
-#[allow(unused)]
 pub struct Evaluator {
-    painter: Option<egui::Painter>,
-    cursor: Cursor,
+    pub painter: Option<egui::Painter>,
+    pub canvas: CanvasSize,
     buildins_internal_fn: HashMap<String, Box<dyn InternalFnPointer>>,
     stack_ctx: VecDeque<Context>,
 }
 
 impl Evaluator {
-    pub fn new(
-        painter: Option<egui::Painter>,
-        width: u32,
-        height: u32,
-        canvas_top: u32,
-        font_size: u32,
-    ) -> Self {
+    pub fn new(painter: Option<egui::Painter>, width: f32, height: f32, top: f32) -> Self {
         Self {
             painter,
-            cursor: Cursor::new(width, height, canvas_top, font_size),
+            canvas: CanvasSize {width, height, top},
             buildins_internal_fn: HashMap::from([
                 (
                     "longitud".to_owned(),
@@ -78,8 +53,8 @@ impl Evaluator {
                     Box::new(tipo) as Box<dyn InternalFnPointer>,
                 ),
                 (
-                    "imprimir".to_owned(),
-                    Box::new(imprimir) as Box<dyn InternalFnPointer>,
+                    "dibujar_texto".to_owned(),
+                    Box::new(dibujar_texto) as Box<dyn InternalFnPointer>
                 ),
                 (
                     "cadena".to_owned(),
@@ -335,12 +310,6 @@ impl Evaluator {
                     &Numeric::Int(*b as i64),
                     operator,
                 ),
-            // (ResultObj::Copy(Object::String(a)), ResultObj::Copy(Object::Numeric(b))) => {
-            //     self.eval_infix_string_int_operation(&a, b, operator)
-            // }
-            // (ResultObj::Copy(Object::Numeric(a)), ResultObj::Copy(Object::String(b))) => {
-            //     self.eval_infix_string_int_operation(&b, a, operator)
-            // }
             (ResultObj::Ref(a), ResultObj::Ref(b)) => match (&*a.borrow(), &*b.borrow()) {
                 (Object::String(a), Object::String(b)) => {
                     self.eval_infix_string_operation(a, b, operator)
@@ -523,6 +492,9 @@ impl Evaluator {
     fn eval_infix_string_int_operation(&self, a: &str, b: &Numeric, op: &TokenType) -> ResultObj {
         if let Numeric::Int(int) = b {
             return match op {
+                TokenType::Plus => {
+                    ResultObj::Ref(new_rc_object(Object::String(format!("{}{}", a, b))))
+                }
                 TokenType::Asterisk => {
                     ResultObj::Ref(new_rc_object(Object::String(a.repeat(*int as usize))))
                 }
