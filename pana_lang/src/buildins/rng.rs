@@ -31,12 +31,6 @@ impl Rng {
         self.state.1.wrapping_add(y)
     }
 
-    #[cfg(target_pointer_width = "32")]
-    #[inline]
-    pub fn rand_usize(&mut self) -> usize {
-        self.rand_u32() as usize
-    }
-
     pub fn rand_bounded_u64(&mut self, m: u64) -> u64 {
         let threshold = m.wrapping_neg().wrapping_rem(m);
         loop {
@@ -45,11 +39,6 @@ impl Rng {
                 return r.wrapping_rem(m);
             }
         }
-    }
-
-    #[cfg(target_pointer_width = "32")]
-    pub fn rand_bounded_usize(&mut self, m: usize) -> usize {
-        self.rand_bounded_u32(m as u32) as usize
     }
 
     pub fn rand_range_i64(&mut self, a: i64, b: i64) -> i64 {
