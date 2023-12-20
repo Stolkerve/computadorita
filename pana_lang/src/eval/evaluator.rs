@@ -5,7 +5,10 @@ use std::{
 };
 
 use crate::buildins::{
-    internal::{cadena, dibujar_texto, longitud, tipo, InternalFnPointer},
+    internal::{
+        cadena, dibujar_circulo, dibujar_linea, dibujar_rectangulo, dibujar_texto, longitud, tipo,
+        InternalFnPointer,
+    },
     member::match_member_fn,
 };
 use crate::parser::expression::{ExprType, Expression, FnParams};
@@ -55,6 +58,18 @@ impl Evaluator {
                 (
                     "dibujar_texto".to_owned(),
                     Box::new(dibujar_texto) as Box<dyn InternalFnPointer>,
+                ),
+                (
+                    "dibujar_linea".to_owned(),
+                    Box::new(dibujar_linea) as Box<dyn InternalFnPointer>,
+                ),
+                (
+                    "dibujar_rectangulo".to_owned(),
+                    Box::new(dibujar_rectangulo) as Box<dyn InternalFnPointer>,
+                ),
+                (
+                    "dibujar_circulo".to_owned(),
+                    Box::new(dibujar_circulo) as Box<dyn InternalFnPointer>,
                 ),
                 (
                     "cadena".to_owned(),

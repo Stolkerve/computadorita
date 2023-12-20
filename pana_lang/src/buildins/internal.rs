@@ -1,7 +1,10 @@
-use crate::eval::{
-    environment::RcEnvironment,
-    evaluator::Evaluator,
-    objects::{new_rc_object, Object, ResultObj},
+use crate::{
+    eval::{
+        environment::RcEnvironment,
+        evaluator::Evaluator,
+        objects::{new_rc_object, Object, ResultObj},
+    },
+    parser::expression::{ExprType, Expression},
 };
 use crate::{parser::expression::FnParams, types::Numeric};
 
@@ -115,12 +118,26 @@ fn extract_f32_from_numeric(num: Numeric) -> f32 {
     }
 }
 
+fn extract_u32_from_numeric(num: Numeric) -> u32 {
+    match num {
+        Numeric::Int(v) => v as u32,
+        Numeric::Float(v) => v as u32,
+    }
+}
+
+fn set_alpha_on_u32(n: u32) -> u32 {
+    if n > 0xFFFFFF {
+        return n
+    }
+    ((n << 8) & 0xFFFFFF00) | 0x000000FF
+}
+
 //                      texto, x, y, tamano de fuente
 // dibujar_texto("hola mundo", 0, 0, 14);
 pub fn dibujar_texto(eval: &mut Evaluator, args: FnParams, env: &RcEnvironment) -> ResultObj {
-    if args.len() != 4 {
+    if args.len() < 4 || args.len() > 5 {
         return ResultObj::Copy(Object::Error(format!(
-            "Se encontro {} argumentos de 4",
+            "Se encontro {} argumentos de 4 o 5",
             args.len()
         )));
     }
@@ -128,11 +145,20 @@ pub fn dibujar_texto(eval: &mut Evaluator, args: FnParams, env: &RcEnvironment) 
     let pos_x_obj = eval.eval_expression(args.get(1).unwrap(), env);
     let pos_y_obj = eval.eval_expression(args.get(2).unwrap(), env);
     let font_size_obj = eval.eval_expression(args.get(3).unwrap(), env);
+    let color_obj = eval.eval_expression(
+        args.get(4).unwrap_or(&Expression::new(
+            ExprType::NumericLiteral(Numeric::Int(0xFFFFFFFF)),
+            0,
+            0,
+        )),
+        env,
+    );
 
     let text: String;
     let pos_x: f32;
     let pos_y: f32;
     let font_size: f32;
+    let color: u32;
 
     match text_obj {
         ResultObj::Copy(obj) => {
@@ -154,15 +180,17 @@ pub fn dibujar_texto(eval: &mut Evaluator, args: FnParams, env: &RcEnvironment) 
         },
     };
 
-    match (pos_x_obj, pos_y_obj, font_size_obj) {
+    match (pos_x_obj, pos_y_obj, font_size_obj, color_obj) {
         (
             ResultObj::Copy(Object::Numeric(pos_x_num)),
             ResultObj::Copy(Object::Numeric(pos_y_num)),
             ResultObj::Copy(Object::Numeric(font_size_num)),
+            ResultObj::Copy(Object::Numeric(color_num)),
         ) => {
             pos_x = extract_f32_from_numeric(pos_x_num);
             pos_y = extract_f32_from_numeric(pos_y_num);
             font_size = extract_f32_from_numeric(font_size_num);
+            color = set_alpha_on_u32(extract_u32_from_numeric(color_num));
         }
         _ => {
             return ResultObj::Copy(Object::Error(
@@ -176,11 +204,47 @@ pub fn dibujar_texto(eval: &mut Evaluator, args: FnParams, env: &RcEnvironment) 
         let galley = painter.layout(
             text,
             egui::FontId::monospace(font_size),
-            egui::Color32::WHITE,
+            egui::Color32::from_rgba_unmultiplied(
+                (color >> 24) as u8,
+                (color >> 16) as u8,
+                (color >> 8) as u8,
+                (color) as u8,
+            ),
             eval.canvas.width,
         );
         painter.galley(egui::Pos2::new(pos_x, pos_y + eval.canvas.top), galley);
     }
 
+    ResultObj::Copy(Object::Void)
+}
+
+// dibujar_linea(0, 0, 50, 50);
+pub fn dibujar_linea(eval: &mut Evaluator, args: FnParams, env: &RcEnvironment) -> ResultObj {
+    if let Some(painter) = eval.painter.as_mut() {
+        painter.line_segment(
+            [egui::Pos2::default(), egui::Pos2::default()],
+            egui::Stroke::new(1.0, egui::Color32::WHITE),
+        )
+    }
+    ResultObj::Copy(Object::Void)
+}
+
+pub fn dibujar_rectangulo(eval: &mut Evaluator, args: FnParams, env: &RcEnvironment) -> ResultObj {
+    if let Some(painter) = eval.painter.as_mut() {
+        painter.line_segment(
+            [egui::Pos2::default(), egui::Pos2::default()],
+            egui::Stroke::new(1.0, egui::Color32::WHITE),
+        )
+    }
+    ResultObj::Copy(Object::Void)
+}
+
+pub fn dibujar_circulo(eval: &mut Evaluator, args: FnParams, env: &RcEnvironment) -> ResultObj {
+    if let Some(painter) = eval.painter.as_mut() {
+        painter.line_segment(
+            [egui::Pos2::default(), egui::Pos2::default()],
+            egui::Stroke::new(1.0, egui::Color32::WHITE),
+        )
+    }
     ResultObj::Copy(Object::Void)
 }
