@@ -125,10 +125,13 @@ impl App {
             self.first_run = false;
         }
 
+        let env = Rc::new(RefCell::new(
+            pana_lang::eval::environment::Environment::new(Some(self.environment.clone())),
+        ));
         let evaluator = self.evaluator.as_mut().unwrap();
         if let pana_lang::eval::objects::ResultObj::Copy(pana_lang::eval::objects::Object::Error(
             msg,
-        )) = evaluator.eval_program(&self.loop_fn, &self.environment)
+        )) = evaluator.eval_program(&self.loop_fn, &env)
         {
             eprintln!("{}", msg);
         }

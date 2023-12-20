@@ -6,8 +6,8 @@ use std::{
 
 use crate::buildins::{
     internal::{
-        cadena, dibujar_circulo, dibujar_linea, dibujar_rectangulo, dibujar_texto, longitud, tipo,
-        InternalFnPointer,
+        aleatorio, cadena, dibujar_circulo, dibujar_linea, dibujar_rectangulo, dibujar_texto,
+        longitud, tipo, InternalFnPointer,
     },
     member::match_member_fn,
 };
@@ -70,6 +70,10 @@ impl Evaluator {
                 (
                     "dibujar_circulo".to_owned(),
                     Box::new(dibujar_circulo) as Box<dyn InternalFnPointer>,
+                ),
+                (
+                    "aleatorio".to_owned(),
+                    Box::new(aleatorio) as Box<dyn InternalFnPointer>,
                 ),
                 (
                     "cadena".to_owned(),

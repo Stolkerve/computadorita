@@ -1,3 +1,5 @@
+use std::time::UNIX_EPOCH;
+
 use crate::{
     eval::{
         environment::RcEnvironment,
@@ -7,6 +9,8 @@ use crate::{
     parser::expression::{ExprType, Expression},
 };
 use crate::{parser::expression::FnParams, types::Numeric};
+
+use super::rng::Rng;
 
 pub trait InternalFnPointer: Fn(&mut Evaluator, FnParams, &RcEnvironment) -> ResultObj {
     fn clone_box<'a>(&self) -> Box<dyn 'a + InternalFnPointer>
@@ -278,26 +282,158 @@ pub fn dibujar_linea(eval: &mut Evaluator, args: FnParams, env: &RcEnvironment) 
     ResultObj::Copy(Object::Void)
 }
 
-pub fn dibujar_rectangulo(
-    eval: &mut Evaluator,
-    _args: FnParams,
-    _env: &RcEnvironment,
-) -> ResultObj {
+// dibujar_rectangulo(0, 0, 100, 100)
+pub fn dibujar_rectangulo(eval: &mut Evaluator, args: FnParams, env: &RcEnvironment) -> ResultObj {
+    if args.len() < 4 || args.len() > 5 {
+        return ResultObj::Copy(Object::Error(format!(
+            "Se encontro {} argumentos de 4 o 5",
+            args.len()
+        )));
+    }
+
+    let pos1_x_obj = eval.eval_expression(args.get(0).unwrap(), env);
+    let pos1_y_obj = eval.eval_expression(args.get(1).unwrap(), env);
+    let pos2_x_obj = eval.eval_expression(args.get(2).unwrap(), env);
+    let pos2_y_obj = eval.eval_expression(args.get(3).unwrap(), env);
+    // let filled_obj = eval.eval_expression(args.get(4).unwrap(), env);
+    let color_obj = eval.eval_expression(
+        args.get(4)
+            .unwrap_or(&Expression::new(DEFAULT_COLOR_EXPR, 0, 0)),
+        env,
+    );
+
+    let pos1_x: f32;
+    let pos1_y: f32;
+    let pos2_x: f32;
+    let pos2_y: f32;
+    let color: u32;
+
+    match (pos1_x_obj, pos1_y_obj, pos2_x_obj, pos2_y_obj, color_obj) {
+        (
+            ResultObj::Copy(Object::Numeric(pos1_x_num)),
+            ResultObj::Copy(Object::Numeric(pos1_y_num)),
+            ResultObj::Copy(Object::Numeric(pos2_x_num)),
+            ResultObj::Copy(Object::Numeric(pos2_y_num)),
+            ResultObj::Copy(Object::Numeric(color_num)),
+        ) => {
+            pos1_x = extract_f32_from_numeric(pos1_x_num);
+            pos1_y = extract_f32_from_numeric(pos1_y_num);
+            pos2_x = extract_f32_from_numeric(pos2_x_num);
+            pos2_y = extract_f32_from_numeric(pos2_y_num);
+            color = set_alpha_on_u32(extract_u32_from_numeric(color_num));
+        }
+        _ => {
+            return ResultObj::Copy(Object::Error(
+                "Se espera un tipo de dato numerico".to_string(),
+            ))
+        }
+    }
+
+    let rgba = extract_rgba(color);
     if let Some(painter) = eval.painter.as_mut() {
-        painter.line_segment(
-            [egui::Pos2::default(), egui::Pos2::default()],
-            egui::Stroke::new(1.0, egui::Color32::WHITE),
-        )
+        painter.rect_filled(
+            egui::Rect::from_two_pos(
+                egui::Pos2::new(pos1_x, pos1_y + eval.canvas.top),
+                egui::Pos2::new(pos2_x, pos2_y + eval.canvas.top),
+            ),
+            egui::Rounding::ZERO,
+            egui::Color32::from_rgba_unmultiplied(rgba.0, rgba.1, rgba.2, rgba.3),
+        );
     }
     ResultObj::Copy(Object::Void)
 }
 
-pub fn dibujar_circulo(eval: &mut Evaluator, _args: FnParams, _env: &RcEnvironment) -> ResultObj {
+// dibujar_circulo(0, 0, 40, 0xff0000)
+pub fn dibujar_circulo(eval: &mut Evaluator, args: FnParams, env: &RcEnvironment) -> ResultObj {
+    if args.len() < 3 || args.len() > 4 {
+        return ResultObj::Copy(Object::Error(format!(
+            "Se encontro {} argumentos de 3 o 4",
+            args.len()
+        )));
+    }
+
+    let pos_x_obj = eval.eval_expression(args.get(0).unwrap(), env);
+    let pos_y_obj = eval.eval_expression(args.get(1).unwrap(), env);
+    let radius_obj = eval.eval_expression(args.get(2).unwrap(), env);
+    let color_obj = eval.eval_expression(
+        args.get(3)
+            .unwrap_or(&Expression::new(DEFAULT_COLOR_EXPR, 0, 0)),
+        env,
+    );
+
+    let pos_x: f32;
+    let pos_y: f32;
+    let radius: f32;
+    let color: u32;
+
+    match (pos_x_obj, pos_y_obj, radius_obj, color_obj) {
+        (
+            ResultObj::Copy(Object::Numeric(pos_x_num)),
+            ResultObj::Copy(Object::Numeric(pos_y_num)),
+            ResultObj::Copy(Object::Numeric(radius_num)),
+            ResultObj::Copy(Object::Numeric(color_num)),
+        ) => {
+            pos_x = extract_f32_from_numeric(pos_x_num);
+            pos_y = extract_f32_from_numeric(pos_y_num);
+            radius = extract_f32_from_numeric(radius_num);
+            color = set_alpha_on_u32(extract_u32_from_numeric(color_num));
+        }
+        _ => {
+            return ResultObj::Copy(Object::Error(
+                "Se espera un tipo de dato numerico".to_string(),
+            ))
+        }
+    }
+
+    let rgba = extract_rgba(color);
     if let Some(painter) = eval.painter.as_mut() {
-        painter.line_segment(
-            [egui::Pos2::default(), egui::Pos2::default()],
-            egui::Stroke::new(1.0, egui::Color32::WHITE),
-        )
+        painter.circle_filled(
+            egui::Pos2::new(pos_x, pos_y),
+            radius,
+            egui::Color32::from_rgba_unmultiplied(rgba.0, rgba.1, rgba.2, rgba.3),
+        );
     }
     ResultObj::Copy(Object::Void)
+}
+
+// aleatorio(0, 100) -> [0, 100]
+pub fn aleatorio(eval: &mut Evaluator, args: FnParams, env: &RcEnvironment) -> ResultObj {
+    if args.len() != 2 {
+        return ResultObj::Copy(Object::Error(format!(
+            "Se encontro {} argumentos de 2",
+            args.len()
+        )));
+    }
+    let min_obj = eval.eval_expression(args.get(0).unwrap(), env);
+    let max_obj = eval.eval_expression(args.get(1).unwrap(), env);
+
+    match (min_obj, max_obj) {
+        (ResultObj::Copy(Object::Numeric(min_num)), ResultObj::Copy(Object::Numeric(max_num))) => {
+            let mut rng = Rng::new(
+                std::time::SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs(),
+            );
+            return match (min_num, max_num) {
+                (Numeric::Int(a), Numeric::Int(b)) => {
+                    ResultObj::Copy(Object::Numeric(Numeric::Int(rng.rand_range_i64(a, b))))
+                }
+                (Numeric::Int(a), Numeric::Float(b)) => ResultObj::Copy(Object::Numeric(
+                    Numeric::Int(rng.rand_range_i64(a, b as i64)),
+                )),
+                (Numeric::Float(a), Numeric::Int(b)) => ResultObj::Copy(Object::Numeric(
+                    Numeric::Int(rng.rand_range_i64(a as i64, b)),
+                )),
+                (Numeric::Float(a), Numeric::Float(b)) => ResultObj::Copy(Object::Numeric(
+                    Numeric::Int(rng.rand_range_i64(a as i64, b as i64)),
+                )),
+            };
+        }
+        _ => {
+            return ResultObj::Copy(Object::Error(
+                "Se espera un tipo de dato numerico".to_string(),
+            ))
+        }
+    }
 }
