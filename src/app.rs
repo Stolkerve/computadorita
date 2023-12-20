@@ -1,109 +1,181 @@
-/// We derive Deserialize/Serialize so we can persist app state on shutdown.
-#[derive(serde::Deserialize, serde::Serialize)]
-#[serde(default)] // if we add new fields, give them default values when deserializing old state
-pub struct TemplateApp {
-    // Example stuff:
-    label: String,
+use std::{cell::RefCell, rc::Rc, time::Duration};
 
-    #[serde(skip)] // This how you opt-out of serialization of a field
-    value: f32,
+use egui::{text_edit::CursorRange, Frame, Margin, Sense};
+use egui_code_editor::{CodeEditor, ColorTheme, Syntax};
+
+#[derive(serde::Deserialize, serde::Serialize)]
+enum Views {
+    Editor,
+    Canvas,
 }
 
-impl Default for TemplateApp {
+#[derive(serde::Deserialize, serde::Serialize)]
+#[serde(default)]
+pub struct App {
+    code: String,
+    view: Views,
+    first_run: bool,
+    #[serde(skip)]
+    loop_fn: pana_lang::parser::statement::BlockStatement,
+    #[serde(skip)]
+    environment: pana_lang::eval::environment::RcEnvironment,
+    #[serde(skip)]
+    evaluator: Option<pana_lang::eval::evaluator::Evaluator>,
+}
+
+impl Default for App {
     fn default() -> Self {
         Self {
-            // Example stuff:
-            label: "Hello World!".to_owned(),
-            value: 2.7,
+            code: include_str!("./example.pana").to_string(),
+            view: Views::Editor,
+            first_run: false,
+            loop_fn: Vec::default(),
+            environment: Rc::new(RefCell::new(
+                pana_lang::eval::environment::Environment::new(None),
+            )),
+            evaluator: None,
         }
     }
 }
 
-impl TemplateApp {
-    /// Called once before the first frame.
-    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        // This is also where you can customize the look and feel of egui using
-        // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
-
-        // Load previous app state (if any).
-        // Note that you must enable the `persistence` feature for this to work.
-        if let Some(storage) = cc.storage {
-            return eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default();
-        }
+impl App {
+    pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
+        // if let Some(storage) = cc.storage {
+        //     return eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default();
+        // }
 
         Default::default()
     }
+
+    fn editor(&mut self, ui: &mut egui::Ui) {
+        let output = CodeEditor::default()
+            .id_source("code editor")
+            .with_rows(1)
+            .stick_to_bottom(true)
+            .vscroll(true)
+            .with_fontsize(14.0)
+            .with_theme(ColorTheme::GRUVBOX)
+            .with_syntax(Syntax::rust())
+            .with_numlines(true)
+            .show(ui, &mut self.code);
+        if output.response.has_focus()
+            && ui.input(|i| {
+                i.modifiers.ctrl
+                    && (i.key_pressed(egui::Key::PlusEquals) || i.key_pressed(egui::Key::Minus))
+            })
+        {
+            if let Some(text_cursor_range) = output.cursor_range {
+                let text_edit_id = output.response.id;
+                self.code.replace_range(
+                    text_cursor_range.primary.ccursor.index - 1
+                        ..text_cursor_range.primary.ccursor.index,
+                    "",
+                );
+                if let Some(mut state) = egui::TextEdit::load_state(ui.ctx(), text_edit_id) {
+                    state.set_cursor_range(Some(CursorRange::one(
+                        output
+                            .galley
+                            .cursor_left_one_character(&text_cursor_range.primary),
+                    )));
+                    state.store(ui.ctx(), text_edit_id);
+                }
+            }
+        }
+    }
+
+    fn canvas(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
+        ctx.request_repaint_after(Duration::from_millis(16)); //60fps
+        let (response, painter) = ui.allocate_painter(ui.available_size(), Sense::drag());
+        let canvas_rect = response.rect;
+        if self.first_run {
+            let lexer = pana_lang::lexer::Lexer::new(self.code.chars().collect());
+            let mut parser = pana_lang::parser::Parser::new(lexer);
+            let mut program = parser.parse();
+
+            self.loop_fn.clear();
+            self.environment = Rc::new(RefCell::new(
+                pana_lang::eval::environment::Environment::new(None),
+            ));
+
+            self.evaluator = Some(pana_lang::eval::evaluator::Evaluator::new(
+                Some(painter),
+                canvas_rect.width(),
+                canvas_rect.width(),
+                canvas_rect.top(),
+            ));
+
+            if let Some(error) = parser.error {
+                eprintln!("{}", error);
+            }
+
+            let evaluator = self.evaluator.as_mut().unwrap();
+
+            if let Ok(loop_fn) = evaluator.extract_loop_fn(&mut program) {
+                self.loop_fn = loop_fn;
+            } else {
+                eprintln!("No se encontro la funcion `Bucle`");
+            }
+
+            if let pana_lang::eval::objects::ResultObj::Copy(
+                pana_lang::eval::objects::Object::Error(msg),
+            ) = evaluator.eval_program(&program, &self.environment)
+            {
+                eprintln!("{}", msg);
+            }
+            self.first_run = false;
+        }
+
+        let env = Rc::new(RefCell::new(
+            pana_lang::eval::environment::Environment::new(Some(self.environment.clone())),
+        ));
+
+        let evaluator = self.evaluator.as_mut().unwrap();
+        evaluator.canvas.width = canvas_rect.width();
+        evaluator.canvas.height = canvas_rect.height();
+        evaluator.canvas.top = canvas_rect.top();
+
+        if let pana_lang::eval::objects::ResultObj::Copy(pana_lang::eval::objects::Object::Error(
+            msg,
+        )) = evaluator.eval_program(&self.loop_fn, &env)
+        {
+            eprintln!("{}", msg);
+        }
+    }
 }
 
-impl eframe::App for TemplateApp {
+impl eframe::App for App {
     /// Called by the frame work to save state before shutdown.
-    fn save(&mut self, storage: &mut dyn eframe::Storage) {
-        eframe::set_value(storage, eframe::APP_KEY, self);
-    }
+    // fn save(&mut self, storage: &mut dyn eframe::Storage) {
+    //     eframe::set_value(storage, eframe::APP_KEY, self);
+    // }
 
     /// Called each time the UI needs repainting, which may be many times per second.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // Put your widgets into a `SidePanel`, `TopPanel`, `CentralPanel`, `Window` or `Area`.
-        // For inspiration and more examples, go to https://emilk.github.io/egui
-
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
-            // The top panel is often a good place for a menu bar:
-
             egui::menu::bar(ui, |ui| {
-                // NOTE: no File->Quit on web pages!
-                let is_web = cfg!(target_arch = "wasm32");
-                if !is_web {
-                    ui.menu_button("File", |ui| {
-                        if ui.button("Quit").clicked() {
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                match self.view {
+                    Views::Editor => {
+                        if ui.button("Ejecutar").clicked() {
+                            self.view = Views::Canvas;
+                            self.first_run = true;
                         }
-                    });
-                    ui.add_space(16.0);
+                    }
+                    Views::Canvas => {
+                        if ui.button("Codigo").clicked() {
+                            self.view = Views::Editor;
+                        }
+                    }
                 }
-
-                egui::widgets::global_dark_light_mode_buttons(ui);
-            });
+                let _ = ui.button("Manual");
+                ui.add_space(16.0);
+            })
         });
 
-        egui::CentralPanel::default().show(ctx, |ui| {
-            // The central panel the region left after adding TopPanel's and SidePanel's
-            ui.heading("eframe template");
-
-            ui.horizontal(|ui| {
-                ui.label("Write something: ");
-                ui.text_edit_singleline(&mut self.label);
+        egui::CentralPanel::default()
+            .frame(Frame::default().inner_margin(Margin::default()))
+            .show(ctx, |ui| match self.view {
+                Views::Editor => self.editor(ui),
+                Views::Canvas => self.canvas(ui, ctx),
             });
-
-            ui.add(egui::Slider::new(&mut self.value, 0.0..=10.0).text("value"));
-            if ui.button("Increment").clicked() {
-                self.value += 1.0;
-            }
-
-            ui.separator();
-
-            ui.add(egui::github_link_file!(
-                "https://github.com/emilk/eframe_template/blob/master/",
-                "Source code."
-            ));
-
-            ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
-                powered_by_egui_and_eframe(ui);
-                egui::warn_if_debug_build(ui);
-            });
-        });
     }
-}
-
-fn powered_by_egui_and_eframe(ui: &mut egui::Ui) {
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 0.0;
-        ui.label("Powered by ");
-        ui.hyperlink_to("egui", "https://github.com/emilk/egui");
-        ui.label(" and ");
-        ui.hyperlink_to(
-            "eframe",
-            "https://github.com/emilk/egui/tree/master/crates/eframe",
-        );
-        ui.label(".");
-    });
 }

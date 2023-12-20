@@ -8,14 +8,15 @@ fn main() -> eframe::Result<()> {
 
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([400.0, 300.0])
-            .with_min_inner_size([300.0, 220.0]),
+            .with_maximized(true)
+            .with_maximize_button(true)
+            .with_title("Computadorita"),
         ..Default::default()
     };
     eframe::run_native(
-        "eframe template",
+        "computadorita",
         native_options,
-        Box::new(|cc| Box::new(eframe_template::TemplateApp::new(cc))),
+        Box::new(|cc| Box::new(computadorita::App::new(cc))),
     )
 }
 
@@ -32,7 +33,7 @@ fn main() {
             .start(
                 "the_canvas_id", // hardcode it
                 web_options,
-                Box::new(|cc| Box::new(eframe_template::TemplateApp::new(cc))),
+                Box::new(|cc| Box::new(computadorita::App::new(cc))),
             )
             .await
             .expect("failed to start eframe");

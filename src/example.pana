@@ -1,0 +1,15 @@
+var mensaje = "Hola mundo";
+var i = 0;
+fn Bucle() {
+	i += 1;
+    dibujar_texto(mensaje + i, 0, 0, 14);
+    
+    dibujar_texto(mensaje + i, 40, 14 * 2 + 8, 14, 0xFF00F0);
+    dibujar_texto(mensaje + i, 0, 14 * 2, 14, 0xFF00F00F);
+    
+    dibujar_texto(mensaje + i, 0, 14 * 4, 14, 0xFF0000);
+    
+    dibujar_linea(0, 0, 100, 100);
+    dibujar_rectangulo(100, 100, 150, 150);
+    dibujar_circulo(lienzo_ancho() / 2, lienzo_altura() / 2, 50);
+}
