@@ -1,7 +1,10 @@
 use std::{cell::RefCell, rc::Rc, time::Duration};
 
-use egui::{text_edit::CursorRange, Color32, FontId, Frame, Margin, RichText, Sense};
+use egui::{text_edit::CursorRange, Color32, FontId, Frame, Margin, RichText, Sense, Vec2, Vec2b};
 use egui_code_editor::{CodeEditor, ColorTheme, Syntax};
+use egui_commonmark::{CommonMarkCache, CommonMarkViewer};
+
+const MANUAL_STR: &'static str = include_str!("manual.md");
 
 #[derive(serde::Deserialize, serde::Serialize)]
 enum Views {
@@ -15,6 +18,7 @@ pub struct App {
     code: String,
     view: Views,
     first_run: bool,
+    show_manual: bool,
     #[serde(skip)]
     loop_fn: pana_lang::parser::statement::BlockStatement,
     #[serde(skip)]
@@ -23,11 +27,14 @@ pub struct App {
     evaluator: Option<pana_lang::eval::evaluator::Evaluator>,
     #[serde(skip)]
     err_msg: String,
+    #[serde(skip)]
+    manual_commonmark_cache: CommonMarkCache,
 }
 
 impl Default for App {
     fn default() -> Self {
         Self {
+            show_manual: false,
             code: include_str!("./example.pana").to_string(),
             view: Views::Editor,
             first_run: false,
@@ -37,6 +44,7 @@ impl Default for App {
             )),
             evaluator: None,
             err_msg: String::new(),
+            manual_commonmark_cache: CommonMarkCache::default(),
         }
     }
 }
@@ -164,6 +172,22 @@ impl eframe::App for App {
 
     /// Called each time the UI needs repainting, which may be many times per second.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        if self.show_manual {
+            egui::Window::new("Manual")
+                .open(&mut self.show_manual)
+                .scroll2(Vec2b::new(true, true))
+                .max_size(Vec2::new(600.0, 500.0))
+                .default_width(600.0)
+                .show(ctx, |ui| {
+                    let markdown = MANUAL_STR;
+                    CommonMarkViewer::new("viewer").show(
+                        ui,
+                        &mut self.manual_commonmark_cache,
+                        markdown,
+                    );
+                });
+        }
+
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
                 match self.view {
@@ -180,7 +204,9 @@ impl eframe::App for App {
                         }
                     }
                 }
-                let _ = ui.button("Manual");
+                if ui.button("Manual").clicked() {
+                    self.show_manual = true;
+                }
                 ui.add_space(16.0);
             })
         });
