@@ -1,8 +1,10 @@
 use std::{cell::RefCell, rc::Rc, time::Duration};
 
 use egui::{text_edit::CursorRange, Color32, FontId, Frame, Margin, RichText, Sense, Vec2, Vec2b};
-use egui_code_editor::{CodeEditor, ColorTheme, Syntax};
+use egui_code_editor::{CodeEditor, ColorTheme};
 use egui_commonmark::{CommonMarkCache, CommonMarkViewer};
+
+use crate::pana_syntax::pana_syntax;
 
 const MANUAL_STR: &str = include_str!("manual.md");
 
@@ -66,7 +68,7 @@ impl App {
             .vscroll(true)
             .with_fontsize(14.0)
             .with_theme(ColorTheme::GRUVBOX)
-            .with_syntax(Syntax::rust())
+            .with_syntax(pana_syntax())
             .with_numlines(true)
             .show(ui, &mut self.code);
         if output.response.has_focus()

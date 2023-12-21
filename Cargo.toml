@@ -18,7 +18,7 @@ egui_commonmark = "0.10"
 
 # You only need serde if you want app persistence:
 serde = { version = "1", features = ["derive"] }
-egui_code_editor = "0.1.9"
+egui_code_editor = { path = "./egui_code_editor" }
 pana_lang = { path = "./pana_lang" }
 
 # native:
