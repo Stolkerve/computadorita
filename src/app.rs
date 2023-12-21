@@ -1,7 +1,10 @@
 use std::{cell::RefCell, rc::Rc, time::Duration};
 
-use egui::{text_edit::CursorRange, Frame, Margin, Sense};
+use egui::{text_edit::CursorRange, Color32, FontId, Frame, Margin, RichText, Sense, Vec2, Vec2b};
 use egui_code_editor::{CodeEditor, ColorTheme, Syntax};
+use egui_commonmark::{CommonMarkCache, CommonMarkViewer};
+
+const MANUAL_STR: &str = include_str!("manual.md");
 
 #[derive(serde::Deserialize, serde::Serialize)]
 enum Views {
@@ -15,17 +18,23 @@ pub struct App {
     code: String,
     view: Views,
     first_run: bool,
+    show_manual: bool,
     #[serde(skip)]
     loop_fn: pana_lang::parser::statement::BlockStatement,
     #[serde(skip)]
     environment: pana_lang::eval::environment::RcEnvironment,
     #[serde(skip)]
     evaluator: Option<pana_lang::eval::evaluator::Evaluator>,
+    #[serde(skip)]
+    err_msg: String,
+    #[serde(skip)]
+    manual_commonmark_cache: CommonMarkCache,
 }
 
 impl Default for App {
     fn default() -> Self {
         Self {
+            show_manual: false,
             code: include_str!("./example.pana").to_string(),
             view: Views::Editor,
             first_run: false,
@@ -34,6 +43,8 @@ impl Default for App {
                 pana_lang::eval::environment::Environment::new(None),
             )),
             evaluator: None,
+            err_msg: String::new(),
+            manual_commonmark_cache: CommonMarkCache::default(),
         }
     }
 }
@@ -84,6 +95,13 @@ impl App {
     }
 
     fn canvas(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
+        if !self.err_msg.is_empty() {
+            ui.label(
+                RichText::new(&self.err_msg)
+                    .color(Color32::RED)
+                    .font(FontId::proportional(20.0)),
+            );
+        }
         ctx.request_repaint_after(Duration::from_millis(16)); //60fps
         let (response, painter) = ui.allocate_painter(ui.available_size(), Sense::drag());
         let canvas_rect = response.rect;
@@ -105,7 +123,8 @@ impl App {
             ));
 
             if let Some(error) = parser.error {
-                eprintln!("{}", error);
+                self.err_msg = error.to_string();
+                return;
             }
 
             let evaluator = self.evaluator.as_mut().unwrap();
@@ -113,14 +132,16 @@ impl App {
             if let Ok(loop_fn) = evaluator.extract_loop_fn(&mut program) {
                 self.loop_fn = loop_fn;
             } else {
-                eprintln!("No se encontro la funcion `Bucle`");
+                self.err_msg = "No se encontro la funcion `Bucle`".to_string();
+                return;
             }
 
             if let pana_lang::eval::objects::ResultObj::Copy(
                 pana_lang::eval::objects::Object::Error(msg),
             ) = evaluator.eval_program(&program, &self.environment)
             {
-                eprintln!("{}", msg);
+                self.err_msg = msg;
+                return;
             }
             self.first_run = false;
         }
@@ -138,7 +159,7 @@ impl App {
             msg,
         )) = evaluator.eval_program(&self.loop_fn, &env)
         {
-            eprintln!("{}", msg);
+            self.err_msg = msg;
         }
     }
 }
@@ -151,6 +172,22 @@ impl eframe::App for App {
 
     /// Called each time the UI needs repainting, which may be many times per second.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        if self.show_manual {
+            egui::Window::new("Manual")
+                .open(&mut self.show_manual)
+                .scroll2(Vec2b::new(true, true))
+                .max_size(Vec2::new(600.0, 500.0))
+                .default_width(600.0)
+                .show(ctx, |ui| {
+                    let markdown = MANUAL_STR;
+                    CommonMarkViewer::new("viewer").show(
+                        ui,
+                        &mut self.manual_commonmark_cache,
+                        markdown,
+                    );
+                });
+        }
+
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
                 match self.view {
@@ -163,10 +200,13 @@ impl eframe::App for App {
                     Views::Canvas => {
                         if ui.button("Codigo").clicked() {
                             self.view = Views::Editor;
+                            self.err_msg.clear();
                         }
                     }
                 }
-                let _ = ui.button("Manual");
+                if ui.button("Manual").clicked() {
+                    self.show_manual = true;
+                }
                 ui.add_space(16.0);
             })
         });
