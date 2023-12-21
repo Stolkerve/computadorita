@@ -4,7 +4,7 @@ use egui::{text_edit::CursorRange, Color32, FontId, Frame, Margin, RichText, Sen
 use egui_code_editor::{CodeEditor, ColorTheme, Syntax};
 use egui_commonmark::{CommonMarkCache, CommonMarkViewer};
 
-const MANUAL_STR: &'static str = include_str!("manual.md");
+const MANUAL_STR: &str = include_str!("manual.md");
 
 #[derive(serde::Deserialize, serde::Serialize)]
 enum Views {
