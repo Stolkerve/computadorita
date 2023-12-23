@@ -788,8 +788,8 @@ impl Evaluator {
         self.insert_obj(name, value_obj, env)
     }
 
-    fn insert_obj(&mut self, name: &str, obj: ResultObj, env: &RcEnvironment) -> ResultObj {
-        let mut env_ref = RefCell::borrow_mut(env);
+    pub fn insert_obj(&mut self, name: &str, obj: ResultObj, env: &RcEnvironment) -> ResultObj {
+        let mut env_ref = env.borrow_mut();
         env_ref.set(name.to_owned(), obj.clone());
         obj
     }

@@ -100,6 +100,76 @@ impl App {
         }
     }
 
+    fn set_colors_vars(&mut self) {
+        let mut env_ref = self.environment.borrow_mut();
+        env_ref.set(
+            "NEGRO".to_owned(),
+            pana_lang::eval::objects::ResultObj::Copy(pana_lang::eval::objects::Object::Numeric(
+                pana_lang::types::Numeric::Int(0x000000),
+            )),
+        );
+        env_ref.set(
+            "BLANCO".to_owned(),
+            pana_lang::eval::objects::ResultObj::Copy(pana_lang::eval::objects::Object::Numeric(
+                pana_lang::types::Numeric::Int(0xFFFFFF),
+            )),
+        );
+        env_ref.set(
+            "ROJO".to_owned(),
+            pana_lang::eval::objects::ResultObj::Copy(pana_lang::eval::objects::Object::Numeric(
+                pana_lang::types::Numeric::Int(0xFF0000),
+            )),
+        );
+        env_ref.set(
+            "CYAN".to_owned(),
+            pana_lang::eval::objects::ResultObj::Copy(pana_lang::eval::objects::Object::Numeric(
+                pana_lang::types::Numeric::Int(0x00FFFF),
+            )),
+        );
+        env_ref.set(
+            "VIOLETA".to_owned(),
+            pana_lang::eval::objects::ResultObj::Copy(pana_lang::eval::objects::Object::Numeric(
+                pana_lang::types::Numeric::Int(0x8000FF),
+            )),
+        );
+        env_ref.set(
+            "VERDE".to_owned(),
+            pana_lang::eval::objects::ResultObj::Copy(pana_lang::eval::objects::Object::Numeric(
+                pana_lang::types::Numeric::Int(0x00FF00),
+            )),
+        );
+        env_ref.set(
+            "AZUL".to_owned(),
+            pana_lang::eval::objects::ResultObj::Copy(pana_lang::eval::objects::Object::Numeric(
+                pana_lang::types::Numeric::Int(0x0000FF),
+            )),
+        );
+        env_ref.set(
+            "AMARILLO".to_owned(),
+            pana_lang::eval::objects::ResultObj::Copy(pana_lang::eval::objects::Object::Numeric(
+                pana_lang::types::Numeric::Int(0xFFFF00),
+            )),
+        );
+        env_ref.set(
+            "NARANJA".to_owned(),
+            pana_lang::eval::objects::ResultObj::Copy(pana_lang::eval::objects::Object::Numeric(
+                pana_lang::types::Numeric::Int(0xFF6600),
+            )),
+        );
+        env_ref.set(
+            "MARRON".to_owned(),
+            pana_lang::eval::objects::ResultObj::Copy(pana_lang::eval::objects::Object::Numeric(
+                pana_lang::types::Numeric::Int(0x804000),
+            )),
+        );
+        env_ref.set(
+            "GRIS".to_owned(),
+            pana_lang::eval::objects::ResultObj::Copy(pana_lang::eval::objects::Object::Numeric(
+                pana_lang::types::Numeric::Int(0x808080),
+            )),
+        );
+    }
+
     fn canvas(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         if !self.err_msg.is_empty() {
             ui.label(
@@ -112,6 +182,7 @@ impl App {
         ctx.request_repaint_after(Duration::from_millis(16)); //60fps
         let (response, painter) = ui.allocate_painter(ui.available_size(), Sense::drag());
         let canvas_rect = response.rect;
+
         if self.first_run {
             let lexer = pana_lang::lexer::Lexer::new(self.code.chars().collect());
             let mut parser = pana_lang::parser::Parser::new(lexer);
@@ -121,6 +192,7 @@ impl App {
             self.environment = Rc::new(RefCell::new(
                 pana_lang::eval::environment::Environment::new(None),
             ));
+            self.set_colors_vars();
 
             self.evaluator = Some(pana_lang::eval::evaluator::Evaluator::new(
                 Some(painter),
