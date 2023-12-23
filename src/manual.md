@@ -189,11 +189,11 @@ dibujar_linea(x1, y1, x2, y2, 0xFF00FF0F);
 #### dibujar_rectangulo
 
 ```
-dibujar_rectangulo(x1, y1, x2, y2);
+dibujar_rectangulo(x, y, scale_x, scale_y);
 # Color opcional
-dibujar_rectangulo(x1, y1, x2, y2, 0xFF00FF);
+dibujar_rectangulo(x, y, scale_x, scale_y, 0xFF00FF);
 # Con transparencia
-dibujar_rectangulo(x1, y1, x2, y2, 0xFF00FF0F);
+dibujar_rectangulo(x, y, scale_x, scale_y, 0xFF00FF0F);
 ```
 
 #### dibujar_circulo

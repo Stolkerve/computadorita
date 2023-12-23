@@ -958,7 +958,7 @@ pub fn dibujar_linea(
     ResultObj::Copy(Object::Void)
 }
 
-// dibujar_rectangulo(0, 0, 100, 100)
+// dibujar_rectangulo(posX, posY, scaleX, scaleY)
 pub fn dibujar_rectangulo(
     eval: &mut Evaluator,
     args: FnParams,
@@ -970,10 +970,10 @@ pub fn dibujar_rectangulo(
         return missmatch_args(4, args.len(), "dibujar_rectangulo".len(), line, col);
     }
 
-    let pos1_x_obj = eval.eval_expression(args.get(0).unwrap(), env);
-    let pos1_y_obj = eval.eval_expression(args.get(1).unwrap(), env);
-    let pos2_x_obj = eval.eval_expression(args.get(2).unwrap(), env);
-    let pos2_y_obj = eval.eval_expression(args.get(3).unwrap(), env);
+    let pos_x_obj = eval.eval_expression(args.get(0).unwrap(), env);
+    let pos_y_obj = eval.eval_expression(args.get(1).unwrap(), env);
+    let scale_x_obj = eval.eval_expression(args.get(2).unwrap(), env);
+    let scale_y_obj = eval.eval_expression(args.get(3).unwrap(), env);
     // let filled_obj = eval.eval_expression(args.get(4).unwrap(), env);
     let color_obj = eval.eval_expression(
         args.get(4)
@@ -981,13 +981,13 @@ pub fn dibujar_rectangulo(
         env,
     );
 
-    let pos1_x: f32;
-    let pos1_y: f32;
-    let pos2_x: f32;
-    let pos2_y: f32;
+    let pos_x: f32;
+    let pos_y: f32;
+    let scale_x: f32;
+    let scale_y: f32;
     let color: u32;
 
-    match (pos1_x_obj, pos1_y_obj, pos2_x_obj, pos2_y_obj, color_obj) {
+    match (pos_x_obj, pos_y_obj, scale_x_obj, scale_y_obj, color_obj) {
         (
             ResultObj::Copy(Object::Numeric(pos1_x_num)),
             ResultObj::Copy(Object::Numeric(pos1_y_num)),
@@ -995,10 +995,10 @@ pub fn dibujar_rectangulo(
             ResultObj::Copy(Object::Numeric(pos2_y_num)),
             ResultObj::Copy(Object::Numeric(color_num)),
         ) => {
-            pos1_x = extract_f32_from_numeric(pos1_x_num);
-            pos1_y = extract_f32_from_numeric(pos1_y_num);
-            pos2_x = extract_f32_from_numeric(pos2_x_num);
-            pos2_y = extract_f32_from_numeric(pos2_y_num);
+            pos_x = extract_f32_from_numeric(pos1_x_num);
+            pos_y = extract_f32_from_numeric(pos1_y_num);
+            scale_x = extract_f32_from_numeric(pos2_x_num);
+            scale_y = extract_f32_from_numeric(pos2_y_num);
             color = set_alpha_on_u32(extract_u32_from_numeric(color_num));
         }
         _ => {
@@ -1014,8 +1014,8 @@ pub fn dibujar_rectangulo(
     if let Some(painter) = eval.painter.as_mut() {
         painter.rect_filled(
             egui::Rect::from_two_pos(
-                egui::Pos2::new(pos1_x, pos1_y + eval.canvas.top),
-                egui::Pos2::new(pos2_x, pos2_y + eval.canvas.top),
+                egui::Pos2::new(pos_x, pos_y + eval.canvas.top),
+                egui::Pos2::new(pos_x + scale_x, pos_y + scale_y + eval.canvas.top),
             ),
             egui::Rounding::ZERO,
             egui::Color32::from_rgba_unmultiplied(rgba.0, rgba.1, rgba.2, rgba.3),
