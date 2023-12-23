@@ -63,6 +63,78 @@ fn extract_rgba(n: u32) -> (u8, u8, u8, u8) {
     ((n >> 24) as u8, (n >> 16) as u8, (n >> 8) as u8, (n) as u8)
 }
 
+fn pana_keys_to_egui_keys(pana_key: &str) -> Option<egui::Key> {
+    match pana_key.to_lowercase().as_str() {
+        "⏷" | "abajo" => Some(egui::Key::ArrowDown),
+        "⏴" | "izquierda" => Some(egui::Key::ArrowLeft),
+        "⏵" | "derecha" => Some(egui::Key::ArrowRight),
+        "⏶" | "arriba" => Some(egui::Key::ArrowUp),
+        "esc" => Some(egui::Key::Escape),
+        "tab" => Some(egui::Key::Tab),
+        "<-" => Some(egui::Key::Backspace),
+        "enter" => Some(egui::Key::Enter),
+        "espacio" => Some(egui::Key::Space),
+        "666" => Some(egui::Key::Insert),
+        "420" => Some(egui::Key::Delete),
+        "yourmom" => Some(egui::Key::Home),
+        "fin" => Some(egui::Key::End),
+        ":p" => Some(egui::Key::PageUp),
+        "69" => Some(egui::Key::PageDown),
+        "menos" => Some(egui::Key::Minus),
+        "+" => Some(egui::Key::PlusEquals),
+        "=" => Some(egui::Key::PlusEquals),
+        "0" => Some(egui::Key::Num0),
+        "1" => Some(egui::Key::Num1),
+        "2" => Some(egui::Key::Num2),
+        "3" => Some(egui::Key::Num3),
+        "4" => Some(egui::Key::Num4),
+        "5" => Some(egui::Key::Num5),
+        "6" => Some(egui::Key::Num6),
+        "7" => Some(egui::Key::Num7),
+        "8" => Some(egui::Key::Num8),
+        "9" => Some(egui::Key::Num9),
+        "a" => Some(egui::Key::A),
+        "b" => Some(egui::Key::B),
+        "c" => Some(egui::Key::C),
+        "d" => Some(egui::Key::D),
+        "e" => Some(egui::Key::E),
+        "f" => Some(egui::Key::F),
+        "g" => Some(egui::Key::G),
+        "h" => Some(egui::Key::H),
+        "i" => Some(egui::Key::I),
+        "j" => Some(egui::Key::J),
+        "k" => Some(egui::Key::K),
+        "l" => Some(egui::Key::L),
+        "m" => Some(egui::Key::M),
+        "n" => Some(egui::Key::N),
+        "o" => Some(egui::Key::O),
+        "p" => Some(egui::Key::P),
+        "q" => Some(egui::Key::Q),
+        "r" => Some(egui::Key::R),
+        "s" => Some(egui::Key::S),
+        "t" => Some(egui::Key::T),
+        "u" => Some(egui::Key::U),
+        "v" => Some(egui::Key::V),
+        "w" => Some(egui::Key::W),
+        "x" => Some(egui::Key::X),
+        "y" => Some(egui::Key::Y),
+        "z" => Some(egui::Key::Z),
+        "f1" => Some(egui::Key::F1),
+        "f2" => Some(egui::Key::F2),
+        "f3" => Some(egui::Key::F3),
+        "f4" => Some(egui::Key::F4),
+        "f5" => Some(egui::Key::F5),
+        "f6" => Some(egui::Key::F6),
+        "f7" => Some(egui::Key::F7),
+        "f8" => Some(egui::Key::F8),
+        "f9" => Some(egui::Key::F9),
+        "f10" => Some(egui::Key::F10),
+        "f11" => Some(egui::Key::F11),
+        "f12" => Some(egui::Key::F12),
+        _ => None,
+    }
+}
+
 pub fn abs(
     eval: &mut Evaluator,
     args: FnParams,
@@ -1036,4 +1108,31 @@ pub fn lienzo_altura(
     }
 
     ResultObj::Copy(Object::Numeric(Numeric::Float(eval.canvas.height as f64)))
+}
+
+pub fn tecla_presionada(
+    eval: &mut Evaluator,
+    args: FnParams,
+    env: &RcEnvironment,
+    line: usize,
+    col: usize,
+) -> ResultObj {
+    if args.len() != 1 {
+        return missmatch_args(1, args.len(), "tecla_presionada".len(), line, col);
+    }
+    let key_obj = eval.eval_expression(args.get(0).unwrap(), env);
+    match key_obj {
+        ResultObj::Copy(obj) => missmatch_type_arg("cadena", &obj.to_string(), line, col),
+        ResultObj::Ref(obj) => match &*obj.borrow() {
+            Object::String(pana_key) => {
+                if let Some(inputs) = &eval.inputs {
+                    if let Some(egui_key) = pana_keys_to_egui_keys(pana_key) {
+                        return ResultObj::Copy(Object::Boolean(inputs.contains(&egui_key)));
+                    }
+                }
+                ResultObj::Copy(Object::Boolean(false))
+            }
+            obj => missmatch_type_arg("cadena", &obj.to_string(), line, col),
+        },
+    }
 }

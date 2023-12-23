@@ -1,6 +1,6 @@
 use std::{
     cell::RefCell,
-    collections::{HashMap, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
     rc::Rc,
 };
 
@@ -8,8 +8,8 @@ use crate::buildins::{
     internal::{
         abs, acos, acosh, asen, asenh, atan, atan2, atanh, cadena, cos, cosh, dibujar_circulo,
         dibujar_linea, dibujar_rectangulo, dibujar_texto, exp, lienzo_altura, lienzo_ancho, log,
-        log10, longitud, max, min, piso, pot, raiz, redondear, sen, senh, tan, tanh, techo, tipo,
-        InternalFnPointer,
+        log10, longitud, max, min, piso, pot, raiz, redondear, sen, senh, tan, tanh, techo,
+        tecla_presionada, tipo, InternalFnPointer,
     },
     member::match_member_fn,
 };
@@ -38,14 +38,22 @@ pub struct CanvasSize {
 
 pub struct Evaluator {
     pub painter: Option<egui::Painter>,
+    pub inputs: Option<HashSet<egui::Key>>,
     pub canvas: CanvasSize,
     buildins_internal_fn: HashMap<String, Box<dyn InternalFnPointer>>,
     stack_ctx: VecDeque<Context>,
 }
 
 impl Evaluator {
-    pub fn new(painter: Option<egui::Painter>, width: f32, height: f32, top: f32) -> Self {
+    pub fn new(
+        painter: Option<egui::Painter>,
+        inputs: Option<HashSet<egui::Key>>,
+        width: f32,
+        height: f32,
+        top: f32,
+    ) -> Self {
         Self {
+            inputs,
             painter,
             canvas: CanvasSize { width, height, top },
             buildins_internal_fn: HashMap::from([
@@ -81,10 +89,6 @@ impl Evaluator {
                     "lienzo_altura".to_owned(),
                     Box::new(lienzo_altura) as Box<dyn InternalFnPointer>,
                 ),
-                // (
-                //     "aleatorio".to_owned(),
-                //     Box::new(aleatorio) as Box<dyn InternalFnPointer>,
-                // ),
                 (
                     "cadena".to_owned(),
                     Box::new(cadena) as Box<dyn InternalFnPointer>,
@@ -184,6 +188,10 @@ impl Evaluator {
                 (
                     "techo".to_owned(),
                     Box::new(techo) as Box<dyn InternalFnPointer>,
+                ),
+                (
+                    "tecla_presionada".to_owned(),
+                    Box::new(tecla_presionada) as Box<dyn InternalFnPointer>,
                 ),
             ]),
             stack_ctx: VecDeque::new(),

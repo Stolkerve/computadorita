@@ -124,6 +124,7 @@ impl App {
 
             self.evaluator = Some(pana_lang::eval::evaluator::Evaluator::new(
                 Some(painter),
+                None,
                 canvas_rect.width(),
                 canvas_rect.width(),
                 canvas_rect.top(),
@@ -161,6 +162,7 @@ impl App {
         evaluator.canvas.width = canvas_rect.width();
         evaluator.canvas.height = canvas_rect.height();
         evaluator.canvas.top = canvas_rect.top();
+        evaluator.inputs = Some(ui.input(|i| i.keys_down.clone()));
 
         if let pana_lang::eval::objects::ResultObj::Copy(pana_lang::eval::objects::Object::Error(
             msg,
