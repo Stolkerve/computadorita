@@ -17,7 +17,7 @@ pub fn pana_syntax() -> Syntax {
             "sino",
             "nulo",
             "fn",
-            "var"
+            "var",
         ]),
         types: HashSet::from([]),
         special: HashSet::from(["Bucle"]),

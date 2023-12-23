@@ -1,18 +1,18 @@
-use std::time::UNIX_EPOCH;
-
 use crate::{
     eval::{
         environment::RcEnvironment,
-        evaluator::Evaluator,
+        evaluator::{create_msg_err, Evaluator},
         objects::{new_rc_object, Object, ResultObj},
     },
     parser::expression::{ExprType, Expression},
 };
 use crate::{parser::expression::FnParams, types::Numeric};
 
-use super::rng::Rng;
+use super::{missmatch_args, missmatch_type_arg};
 
-pub trait InternalFnPointer: Fn(&mut Evaluator, FnParams, &RcEnvironment) -> ResultObj {
+pub trait InternalFnPointer:
+    Fn(&mut Evaluator, FnParams, &RcEnvironment, usize, usize) -> ResultObj
+{
     fn clone_box<'a>(&self) -> Box<dyn 'a + InternalFnPointer>
     where
         Self: 'a;
@@ -20,7 +20,7 @@ pub trait InternalFnPointer: Fn(&mut Evaluator, FnParams, &RcEnvironment) -> Res
 
 impl<F> InternalFnPointer for F
 where
-    F: Fn(&mut Evaluator, FnParams, &RcEnvironment) -> ResultObj + Clone,
+    F: Fn(&mut Evaluator, FnParams, &RcEnvironment, usize, usize) -> ResultObj + Clone,
 {
     fn clone_box<'a>(&self) -> Box<dyn 'a + InternalFnPointer>
     where
@@ -36,84 +36,7 @@ impl<'a> Clone for Box<dyn 'a + InternalFnPointer> {
     }
 }
 
-// Funcion que retorna la longitud de un string o array
-pub fn longitud(eval: &mut Evaluator, args: FnParams, env: &RcEnvironment) -> ResultObj {
-    if args.len() != 1 {
-        return ResultObj::Copy(Object::Error(format!(
-            "Se encontro {} argumentos de 1",
-            args.len()
-        )));
-    }
-    let arg_obj = eval.eval_expression(args.get(0).unwrap(), env);
-    match arg_obj {
-        ResultObj::Copy(obj) => ResultObj::Copy(Object::Error(format!(
-            "Se espera un tipo de dato cadena, no {}",
-            obj.get_type()
-        ))),
-        ResultObj::Ref(obj) => match &*obj.borrow() {
-            Object::List(objs) => ResultObj::Copy(Object::Numeric(Numeric::Int(objs.len() as i64))),
-            Object::Dictionary(pairs) => {
-                ResultObj::Copy(Object::Numeric(Numeric::Int(pairs.len() as i64)))
-            }
-            Object::String(string) => {
-                ResultObj::Copy(Object::Numeric(Numeric::Int(string.len() as i64)))
-            }
-            obj => ResultObj::Copy(Object::Error(format!(
-                "Se espera un tipo de dato cadena, no {}",
-                obj.get_type()
-            ))),
-        },
-    }
-}
-
-// Funcion que imprime en una linea objetos en pantalla
-// pub fn imprimir(_eval: &mut Evaluator, _args: FnParams, _env: &RcEnvironment) -> ResultObj {
-// if !args.is_empty() {
-// let objs = args
-//     .iter()
-//     .map(|arg| eval.eval_expression(arg, env))
-//     .collect::<Vec<_>>();
-// let string = objs
-//     .iter()
-//     .map(|obj| obj.to_string())
-//     .collect::<Vec<_>>()
-//     .join("");
-// }
-//     ResultObj::Copy(Object::Void)
-// }
-
-// Funcion que retorna el tipo de dato del objeto
-pub fn tipo(eval: &mut Evaluator, args: FnParams, env: &RcEnvironment) -> ResultObj {
-    if args.len() != 1 {
-        return ResultObj::Copy(Object::Error(format!(
-            "Se encontro {} argumentos de 1",
-            args.len()
-        )));
-    }
-    let arg_obj = eval.eval_expression(args.get(0).unwrap(), env);
-    match arg_obj {
-        ResultObj::Copy(obj) => ResultObj::Ref(new_rc_object(Object::String(obj.get_type()))),
-        ResultObj::Ref(obj) => {
-            ResultObj::Ref(new_rc_object(Object::String(obj.borrow().get_type())))
-        }
-    }
-}
-
-pub fn cadena(eval: &mut Evaluator, args: FnParams, env: &RcEnvironment) -> ResultObj {
-    if args.len() != 1 {
-        return ResultObj::Copy(Object::Error(format!(
-            "Se encontro {} argumentos de 1",
-            args.len()
-        )));
-    }
-    let arg_obj = eval.eval_expression(args.get(0).unwrap(), env);
-    match arg_obj {
-        ResultObj::Copy(obj) => ResultObj::Ref(new_rc_object(Object::String(obj.to_string()))),
-        ResultObj::Ref(obj) => {
-            ResultObj::Ref(new_rc_object(Object::String(obj.borrow().to_string())))
-        }
-    }
-}
+const DEFAULT_COLOR_EXPR: ExprType = ExprType::NumericLiteral(Numeric::Int(0xFFFFFFFF));
 
 fn extract_f32_from_numeric(num: Numeric) -> f32 {
     match num {
@@ -140,17 +63,699 @@ fn extract_rgba(n: u32) -> (u8, u8, u8, u8) {
     ((n >> 24) as u8, (n >> 16) as u8, (n >> 8) as u8, (n) as u8)
 }
 
-const DEFAULT_COLOR_EXPR: ExprType = ExprType::NumericLiteral(Numeric::Int(0xFFFFFFFF));
+pub fn abs(
+    eval: &mut Evaluator,
+    args: FnParams,
+    env: &RcEnvironment,
+    line: usize,
+    col: usize,
+) -> ResultObj {
+    if args.len() != 1 {
+        return missmatch_args(1, args.len(), "abs".len(), line, col);
+    }
+
+    let num_obj = eval.eval_expression(args.get(0).unwrap(), env);
+    if let ResultObj::Copy(Object::Numeric(num)) = num_obj {
+        match num {
+            Numeric::Int(a) => ResultObj::Copy(Object::Numeric(Numeric::Float((a as f64).acos()))),
+            Numeric::Float(a) => ResultObj::Copy(Object::Numeric(Numeric::Float(a.abs()))),
+        }
+    } else {
+        missmatch_type_arg("numerico", &num_obj.get_type(), line, col)
+    }
+}
+
+pub fn acos(
+    eval: &mut Evaluator,
+    args: FnParams,
+    env: &RcEnvironment,
+    line: usize,
+    col: usize,
+) -> ResultObj {
+    if args.len() != 1 {
+        return missmatch_args(1, args.len(), "acos".len(), line, col);
+    }
+
+    let num_obj = eval.eval_expression(args.get(0).unwrap(), env);
+    if let ResultObj::Copy(Object::Numeric(num)) = num_obj {
+        match num {
+            Numeric::Int(a) => ResultObj::Copy(Object::Numeric(Numeric::Float((a as f64).acos()))),
+            Numeric::Float(a) => ResultObj::Copy(Object::Numeric(Numeric::Float(a.acos()))),
+        }
+    } else {
+        missmatch_type_arg("numerico", &num_obj.get_type(), line, col)
+    }
+}
+
+pub fn cos(
+    eval: &mut Evaluator,
+    args: FnParams,
+    env: &RcEnvironment,
+    line: usize,
+    col: usize,
+) -> ResultObj {
+    if args.len() != 1 {
+        return missmatch_args(1, args.len(), "cos".len(), line, col);
+    }
+
+    let num_obj = eval.eval_expression(args.get(0).unwrap(), env);
+    if let ResultObj::Copy(Object::Numeric(num)) = num_obj {
+        match num {
+            Numeric::Int(a) => ResultObj::Copy(Object::Numeric(Numeric::Float((a as f64).cos()))),
+            Numeric::Float(a) => ResultObj::Copy(Object::Numeric(Numeric::Float(a.cos()))),
+        }
+    } else {
+        missmatch_type_arg("numerico", &num_obj.get_type(), line, col)
+    }
+}
+
+pub fn acosh(
+    eval: &mut Evaluator,
+    args: FnParams,
+    env: &RcEnvironment,
+    line: usize,
+    col: usize,
+) -> ResultObj {
+    if args.len() != 1 {
+        return missmatch_args(1, args.len(), "acosh".len(), line, col);
+    }
+
+    let num_obj = eval.eval_expression(args.get(0).unwrap(), env);
+    if let ResultObj::Copy(Object::Numeric(num)) = num_obj {
+        match num {
+            Numeric::Int(a) => ResultObj::Copy(Object::Numeric(Numeric::Float((a as f64).acosh()))),
+            Numeric::Float(a) => ResultObj::Copy(Object::Numeric(Numeric::Float(a.acosh()))),
+        }
+    } else {
+        missmatch_type_arg("numerico", &num_obj.get_type(), line, col)
+    }
+}
+
+pub fn asen(
+    eval: &mut Evaluator,
+    args: FnParams,
+    env: &RcEnvironment,
+    line: usize,
+    col: usize,
+) -> ResultObj {
+    if args.len() != 1 {
+        return missmatch_args(1, args.len(), "asen".len(), line, col);
+    }
+
+    let num_obj = eval.eval_expression(args.get(0).unwrap(), env);
+    if let ResultObj::Copy(Object::Numeric(num)) = num_obj {
+        match num {
+            Numeric::Int(a) => ResultObj::Copy(Object::Numeric(Numeric::Float((a as f64).asin()))),
+            Numeric::Float(a) => ResultObj::Copy(Object::Numeric(Numeric::Float(a.asin()))),
+        }
+    } else {
+        missmatch_type_arg("numerico", &num_obj.get_type(), line, col)
+    }
+}
+
+pub fn asenh(
+    eval: &mut Evaluator,
+    args: FnParams,
+    env: &RcEnvironment,
+    line: usize,
+    col: usize,
+) -> ResultObj {
+    if args.len() != 1 {
+        return missmatch_args(1, args.len(), "asenh".len(), line, col);
+    }
+
+    let num_obj = eval.eval_expression(args.get(0).unwrap(), env);
+    if let ResultObj::Copy(Object::Numeric(num)) = num_obj {
+        match num {
+            Numeric::Int(a) => ResultObj::Copy(Object::Numeric(Numeric::Float((a as f64).asinh()))),
+            Numeric::Float(a) => ResultObj::Copy(Object::Numeric(Numeric::Float(a.asinh()))),
+        }
+    } else {
+        missmatch_type_arg("numerico", &num_obj.get_type(), line, col)
+    }
+}
+
+pub fn atan(
+    eval: &mut Evaluator,
+    args: FnParams,
+    env: &RcEnvironment,
+    line: usize,
+    col: usize,
+) -> ResultObj {
+    if args.len() != 1 {
+        return missmatch_args(1, args.len(), "atan".len(), line, col);
+    }
+
+    let num_obj = eval.eval_expression(args.get(0).unwrap(), env);
+    if let ResultObj::Copy(Object::Numeric(num)) = num_obj {
+        match num {
+            Numeric::Int(a) => ResultObj::Copy(Object::Numeric(Numeric::Float((a as f64).atan()))),
+            Numeric::Float(a) => ResultObj::Copy(Object::Numeric(Numeric::Float(a.atan()))),
+        }
+    } else {
+        missmatch_type_arg("numerico", &num_obj.get_type(), line, col)
+    }
+}
+
+pub fn atanh(
+    eval: &mut Evaluator,
+    args: FnParams,
+    env: &RcEnvironment,
+    line: usize,
+    col: usize,
+) -> ResultObj {
+    if args.len() != 1 {
+        return missmatch_args(1, args.len(), "atanh".len(), line, col);
+    }
+
+    let num_obj = eval.eval_expression(args.get(0).unwrap(), env);
+    if let ResultObj::Copy(Object::Numeric(num)) = num_obj {
+        match num {
+            Numeric::Int(a) => ResultObj::Copy(Object::Numeric(Numeric::Float((a as f64).atanh()))),
+            Numeric::Float(a) => ResultObj::Copy(Object::Numeric(Numeric::Float(a.atanh()))),
+        }
+    } else {
+        missmatch_type_arg("numerico", &num_obj.get_type(), line, col)
+    }
+}
+
+pub fn atan2(
+    eval: &mut Evaluator,
+    args: FnParams,
+    env: &RcEnvironment,
+    line: usize,
+    col: usize,
+) -> ResultObj {
+    if args.len() != 2 {
+        return missmatch_args(2, args.len(), "atan2".len(), line, col);
+    }
+
+    let x_obj = eval.eval_expression(args.get(0).unwrap(), env);
+    let y_obj = eval.eval_expression(args.get(1).unwrap(), env);
+    let y: f64;
+    if let ResultObj::Copy(Object::Numeric(num)) = y_obj {
+        match num {
+            Numeric::Int(a) => y = a as f64,
+            Numeric::Float(a) => y = a,
+        };
+    } else {
+        return missmatch_type_arg("numerico", &y_obj.get_type(), line, col);
+    }
+
+    if let ResultObj::Copy(Object::Numeric(num)) = x_obj {
+        match num {
+            Numeric::Int(a) => {
+                ResultObj::Copy(Object::Numeric(Numeric::Float((a as f64).atan2(y))))
+            }
+            Numeric::Float(a) => ResultObj::Copy(Object::Numeric(Numeric::Float(a.atan2(y)))),
+        }
+    } else {
+        missmatch_type_arg("numerico", &x_obj.get_type(), line, col)
+    }
+}
+
+pub fn cosh(
+    eval: &mut Evaluator,
+    args: FnParams,
+    env: &RcEnvironment,
+    line: usize,
+    col: usize,
+) -> ResultObj {
+    if args.len() != 1 {
+        return missmatch_args(1, args.len(), "cosh".len(), line, col);
+    }
+
+    let num_obj = eval.eval_expression(args.get(0).unwrap(), env);
+    if let ResultObj::Copy(Object::Numeric(num)) = num_obj {
+        match num {
+            Numeric::Int(a) => ResultObj::Copy(Object::Numeric(Numeric::Float((a as f64).cosh()))),
+            Numeric::Float(a) => ResultObj::Copy(Object::Numeric(Numeric::Float(a.cosh()))),
+        }
+    } else {
+        missmatch_type_arg("numerico", &num_obj.get_type(), line, col)
+    }
+}
+
+pub fn exp(
+    eval: &mut Evaluator,
+    args: FnParams,
+    env: &RcEnvironment,
+    line: usize,
+    col: usize,
+) -> ResultObj {
+    if args.len() != 1 {
+        return missmatch_args(1, args.len(), "exp".len(), line, col);
+    }
+
+    let num_obj = eval.eval_expression(args.get(0).unwrap(), env);
+    if let ResultObj::Copy(Object::Numeric(num)) = num_obj {
+        match num {
+            Numeric::Int(a) => ResultObj::Copy(Object::Numeric(Numeric::Float((a as f64).exp()))),
+            Numeric::Float(a) => ResultObj::Copy(Object::Numeric(Numeric::Float(a.exp()))),
+        }
+    } else {
+        missmatch_type_arg("numerico", &num_obj.get_type(), line, col)
+    }
+}
+
+pub fn log(
+    eval: &mut Evaluator,
+    args: FnParams,
+    env: &RcEnvironment,
+    line: usize,
+    col: usize,
+) -> ResultObj {
+    if args.len() != 2 {
+        return missmatch_args(2, args.len(), "log".len(), line, col);
+    }
+
+    let num_obj = eval.eval_expression(args.get(0).unwrap(), env);
+    let base_obj = eval.eval_expression(args.get(1).unwrap(), env);
+    let base: f64;
+
+    if let ResultObj::Copy(Object::Numeric(num)) = base_obj {
+        match num {
+            Numeric::Int(a) => base = a as f64,
+            Numeric::Float(a) => base = a,
+        };
+    } else {
+        return missmatch_type_arg("numerico", &base_obj.get_type(), line, col);
+    }
+
+    if let ResultObj::Copy(Object::Numeric(num)) = num_obj {
+        match num {
+            Numeric::Int(a) => {
+                ResultObj::Copy(Object::Numeric(Numeric::Float((a as f64).log(base))))
+            }
+            Numeric::Float(a) => ResultObj::Copy(Object::Numeric(Numeric::Float(a.log(base)))),
+        }
+    } else {
+        missmatch_type_arg("numerico", &num_obj.get_type(), line, col)
+    }
+}
+
+pub fn log10(
+    eval: &mut Evaluator,
+    args: FnParams,
+    env: &RcEnvironment,
+    line: usize,
+    col: usize,
+) -> ResultObj {
+    if args.len() != 1 {
+        return missmatch_args(1, args.len(), "log10".len(), line, col);
+    }
+
+    let num_obj = eval.eval_expression(args.get(0).unwrap(), env);
+    if let ResultObj::Copy(Object::Numeric(num)) = num_obj {
+        match num {
+            Numeric::Int(a) => ResultObj::Copy(Object::Numeric(Numeric::Float((a as f64).log10()))),
+            Numeric::Float(a) => ResultObj::Copy(Object::Numeric(Numeric::Float(a.log10()))),
+        }
+    } else {
+        missmatch_type_arg("numerico", &num_obj.get_type(), line, col)
+    }
+}
+
+pub fn piso(
+    eval: &mut Evaluator,
+    args: FnParams,
+    env: &RcEnvironment,
+    line: usize,
+    col: usize,
+) -> ResultObj {
+    if args.len() != 1 {
+        return missmatch_args(1, args.len(), "[iso".len(), line, col);
+    }
+
+    let num_obj = eval.eval_expression(args.get(0).unwrap(), env);
+    if let ResultObj::Copy(Object::Numeric(num)) = num_obj {
+        match num {
+            Numeric::Float(a) => ResultObj::Copy(Object::Numeric(Numeric::Float(a.floor()))),
+            n => ResultObj::Copy(Object::Numeric(n)),
+        }
+    } else {
+        missmatch_type_arg("numerico", &num_obj.get_type(), line, col)
+    }
+}
+
+pub fn pot(
+    eval: &mut Evaluator,
+    args: FnParams,
+    env: &RcEnvironment,
+    line: usize,
+    col: usize,
+) -> ResultObj {
+    if args.len() != 2 {
+        return missmatch_args(2, args.len(), "pot".len(), line, col);
+    }
+
+    let num_obj = eval.eval_expression(args.get(0).unwrap(), env);
+    let base_obj = eval.eval_expression(args.get(1).unwrap(), env);
+    let base: f64;
+
+    if let ResultObj::Copy(Object::Numeric(num)) = base_obj {
+        match num {
+            Numeric::Int(a) => base = a as f64,
+            Numeric::Float(a) => base = a,
+        };
+    } else {
+        return missmatch_type_arg("numerico", &base_obj.get_type(), line, col);
+    }
+
+    if let ResultObj::Copy(Object::Numeric(num)) = num_obj {
+        match num {
+            Numeric::Int(a) => {
+                ResultObj::Copy(Object::Numeric(Numeric::Float((a as f64).powf(base))))
+            }
+            Numeric::Float(a) => ResultObj::Copy(Object::Numeric(Numeric::Float(a.powf(base)))),
+        }
+    } else {
+        missmatch_type_arg("numerico", &num_obj.get_type(), line, col)
+    }
+}
+
+pub fn max(
+    eval: &mut Evaluator,
+    args: FnParams,
+    env: &RcEnvironment,
+    line: usize,
+    col: usize,
+) -> ResultObj {
+    if args.len() != 2 {
+        return missmatch_args(2, args.len(), "max".len(), line, col);
+    }
+
+    let a_obj = eval.eval_expression(args.get(0).unwrap(), env);
+    let b_obj = eval.eval_expression(args.get(1).unwrap(), env);
+
+    match (a_obj, b_obj) {
+        (ResultObj::Copy(Object::Numeric(a_num)), ResultObj::Copy(Object::Numeric(b_num))) => {
+            match (a_num, b_num) {
+                (Numeric::Int(a), Numeric::Int(b)) => {
+                    ResultObj::Copy(Object::Numeric(Numeric::Int(a.max(b))))
+                }
+                (Numeric::Int(a), Numeric::Float(b)) => {
+                    ResultObj::Copy(Object::Numeric(Numeric::Int(a.max(b as i64))))
+                }
+                (Numeric::Float(a), Numeric::Int(b)) => {
+                    ResultObj::Copy(Object::Numeric(Numeric::Float(a.max(b as f64))))
+                }
+                (Numeric::Float(a), Numeric::Float(b)) => {
+                    ResultObj::Copy(Object::Numeric(Numeric::Float(a.max(b))))
+                }
+            }
+        }
+        _ => ResultObj::Copy(Object::Error(create_msg_err(
+            "Se debe ser un tipo de dato numerico".into(),
+            line,
+            col,
+        ))),
+    }
+}
+
+// 666
+pub fn min(
+    eval: &mut Evaluator,
+    args: FnParams,
+    env: &RcEnvironment,
+    line: usize,
+    col: usize,
+) -> ResultObj {
+    if args.len() != 2 {
+        return missmatch_args(2, args.len(), "min".len(), line, col);
+    }
+
+    let a_obj = eval.eval_expression(args.get(0).unwrap(), env);
+    let b_obj = eval.eval_expression(args.get(1).unwrap(), env);
+
+    match (a_obj, b_obj) {
+        (ResultObj::Copy(Object::Numeric(a_num)), ResultObj::Copy(Object::Numeric(b_num))) => {
+            match (a_num, b_num) {
+                (Numeric::Int(a), Numeric::Int(b)) => {
+                    ResultObj::Copy(Object::Numeric(Numeric::Int(a.min(b))))
+                }
+                (Numeric::Int(a), Numeric::Float(b)) => {
+                    ResultObj::Copy(Object::Numeric(Numeric::Int(a.min(b as i64))))
+                }
+                (Numeric::Float(a), Numeric::Int(b)) => {
+                    ResultObj::Copy(Object::Numeric(Numeric::Float(a.min(b as f64))))
+                }
+                (Numeric::Float(a), Numeric::Float(b)) => {
+                    ResultObj::Copy(Object::Numeric(Numeric::Float(a.min(b))))
+                }
+            }
+        }
+        _ => ResultObj::Copy(Object::Error(create_msg_err(
+            "Se debe ser un tipo de dato numerico".into(),
+            line,
+            col,
+        ))),
+    }
+}
+
+pub fn raiz(
+    eval: &mut Evaluator,
+    args: FnParams,
+    env: &RcEnvironment,
+    line: usize,
+    col: usize,
+) -> ResultObj {
+    if args.len() != 1 {
+        return missmatch_args(1, args.len(), "raiz".len(), line, col);
+    }
+
+    let num_obj = eval.eval_expression(args.get(0).unwrap(), env);
+    if let ResultObj::Copy(Object::Numeric(num)) = num_obj {
+        match num {
+            Numeric::Int(a) => ResultObj::Copy(Object::Numeric(Numeric::Float((a as f64).sqrt()))),
+            Numeric::Float(a) => ResultObj::Copy(Object::Numeric(Numeric::Float(a.sqrt()))),
+        }
+    } else {
+        missmatch_type_arg("numerico", &num_obj.get_type(), line, col)
+    }
+}
+
+pub fn redondear(
+    eval: &mut Evaluator,
+    args: FnParams,
+    env: &RcEnvironment,
+    line: usize,
+    col: usize,
+) -> ResultObj {
+    if args.len() != 1 {
+        return missmatch_args(1, args.len(), "redondear".len(), line, col);
+    }
+
+    let num_obj = eval.eval_expression(args.get(0).unwrap(), env);
+
+    if let ResultObj::Copy(Object::Numeric(num)) = num_obj {
+        match num {
+            Numeric::Int(a) => ResultObj::Copy(Object::Numeric(Numeric::Float((a as f64).acos()))),
+            Numeric::Float(a) => ResultObj::Copy(Object::Numeric(Numeric::Float(a.abs()))),
+        }
+    } else {
+        missmatch_type_arg("numerico", &num_obj.get_type(), line, col)
+    }
+}
+
+pub fn sen(
+    eval: &mut Evaluator,
+    args: FnParams,
+    env: &RcEnvironment,
+    line: usize,
+    col: usize,
+) -> ResultObj {
+    if args.len() != 1 {
+        return missmatch_args(1, args.len(), "sen".len(), line, col);
+    }
+
+    let num_obj = eval.eval_expression(args.get(0).unwrap(), env);
+    if let ResultObj::Copy(Object::Numeric(num)) = num_obj {
+        match num {
+            Numeric::Int(a) => ResultObj::Copy(Object::Numeric(Numeric::Float((a as f64).sin()))),
+            Numeric::Float(a) => ResultObj::Copy(Object::Numeric(Numeric::Float(a.sin()))),
+        }
+    } else {
+        missmatch_type_arg("numerico", &num_obj.get_type(), line, col)
+    }
+}
+
+pub fn senh(
+    eval: &mut Evaluator,
+    args: FnParams,
+    env: &RcEnvironment,
+    line: usize,
+    col: usize,
+) -> ResultObj {
+    if args.len() != 1 {
+        return missmatch_args(1, args.len(), "senh".len(), line, col);
+    }
+
+    let num_obj = eval.eval_expression(args.get(0).unwrap(), env);
+    if let ResultObj::Copy(Object::Numeric(num)) = num_obj {
+        match num {
+            Numeric::Int(a) => ResultObj::Copy(Object::Numeric(Numeric::Float((a as f64).sinh()))),
+            Numeric::Float(a) => ResultObj::Copy(Object::Numeric(Numeric::Float(a.sinh()))),
+        }
+    } else {
+        missmatch_type_arg("numerico", &num_obj.get_type(), line, col)
+    }
+}
+
+pub fn tan(
+    eval: &mut Evaluator,
+    args: FnParams,
+    env: &RcEnvironment,
+    line: usize,
+    col: usize,
+) -> ResultObj {
+    if args.len() != 1 {
+        return missmatch_args(1, args.len(), "tan".len(), line, col);
+    }
+
+    let num_obj = eval.eval_expression(args.get(0).unwrap(), env);
+    if let ResultObj::Copy(Object::Numeric(num)) = num_obj {
+        match num {
+            Numeric::Int(a) => ResultObj::Copy(Object::Numeric(Numeric::Float((a as f64).tan()))),
+            Numeric::Float(a) => ResultObj::Copy(Object::Numeric(Numeric::Float(a.tan()))),
+        }
+    } else {
+        missmatch_type_arg("numerico", &num_obj.get_type(), line, col)
+    }
+}
+
+pub fn tanh(
+    eval: &mut Evaluator,
+    args: FnParams,
+    env: &RcEnvironment,
+    line: usize,
+    col: usize,
+) -> ResultObj {
+    if args.len() != 1 {
+        return missmatch_args(1, args.len(), "tanh".len(), line, col);
+    }
+
+    let num_obj = eval.eval_expression(args.get(0).unwrap(), env);
+    if let ResultObj::Copy(Object::Numeric(num)) = num_obj {
+        match num {
+            Numeric::Int(a) => ResultObj::Copy(Object::Numeric(Numeric::Float((a as f64).tanh()))),
+            Numeric::Float(a) => ResultObj::Copy(Object::Numeric(Numeric::Float(a.tanh()))),
+        }
+    } else {
+        missmatch_type_arg("numerico", &num_obj.get_type(), line, col)
+    }
+}
+
+pub fn techo(
+    eval: &mut Evaluator,
+    args: FnParams,
+    env: &RcEnvironment,
+    line: usize,
+    col: usize,
+) -> ResultObj {
+    if args.len() != 1 {
+        return missmatch_args(1, args.len(), "techo".len(), line, col);
+    }
+
+    let num_obj = eval.eval_expression(args.get(0).unwrap(), env);
+    if let ResultObj::Copy(Object::Numeric(num)) = num_obj {
+        match num {
+            Numeric::Int(a) => ResultObj::Copy(Object::Numeric(Numeric::Float((a as f64).ceil()))),
+            Numeric::Float(a) => ResultObj::Copy(Object::Numeric(Numeric::Float(a.ceil()))),
+        }
+    } else {
+        missmatch_type_arg("numerico", &num_obj.get_type(), line, col)
+    }
+}
+
+// Funcion que retorna la longitud de un string o array
+pub fn longitud(
+    eval: &mut Evaluator,
+    args: FnParams,
+    env: &RcEnvironment,
+    line: usize,
+    col: usize,
+) -> ResultObj {
+    if args.len() != 1 {
+        return missmatch_args(1, args.len(), "longitud".len(), line, col);
+    }
+
+    let arg_obj = eval.eval_expression(args.get(0).unwrap(), env);
+    match arg_obj {
+        ResultObj::Copy(obj) => ResultObj::Copy(Object::Error(format!(
+            "Se espera un tipo de dato cadena, no {}",
+            obj.get_type()
+        ))),
+        ResultObj::Ref(obj) => match &*obj.borrow() {
+            Object::List(objs) => ResultObj::Copy(Object::Numeric(Numeric::Int(objs.len() as i64))),
+            Object::Dictionary(pairs) => {
+                ResultObj::Copy(Object::Numeric(Numeric::Int(pairs.len() as i64)))
+            }
+            Object::String(string) => {
+                ResultObj::Copy(Object::Numeric(Numeric::Int(string.len() as i64)))
+            }
+            obj => ResultObj::Copy(Object::Error(format!(
+                "Se espera un tipo de dato cadena, no {}",
+                obj.get_type()
+            ))),
+        },
+    }
+}
+
+// Funcion que retorna el tipo de dato del objeto
+pub fn tipo(
+    eval: &mut Evaluator,
+    args: FnParams,
+    env: &RcEnvironment,
+    line: usize,
+    col: usize,
+) -> ResultObj {
+    if args.len() != 1 {
+        return missmatch_args(1, args.len(), "tipo".len(), line, col);
+    }
+
+    let arg_obj = eval.eval_expression(args.get(0).unwrap(), env);
+    match arg_obj {
+        ResultObj::Copy(obj) => ResultObj::Ref(new_rc_object(Object::String(obj.get_type()))),
+        ResultObj::Ref(obj) => {
+            ResultObj::Ref(new_rc_object(Object::String(obj.borrow().get_type())))
+        }
+    }
+}
+
+pub fn cadena(
+    eval: &mut Evaluator,
+    args: FnParams,
+    env: &RcEnvironment,
+    line: usize,
+    col: usize,
+) -> ResultObj {
+    if args.len() != 1 {
+        return missmatch_args(1, args.len(), "cadena".len(), line, col);
+    }
+
+    let arg_obj = eval.eval_expression(args.get(0).unwrap(), env);
+    match arg_obj {
+        ResultObj::Copy(obj) => ResultObj::Ref(new_rc_object(Object::String(obj.to_string()))),
+        ResultObj::Ref(obj) => {
+            ResultObj::Ref(new_rc_object(Object::String(obj.borrow().to_string())))
+        }
+    }
+}
 
 //                      texto, x, y, tamano de fuente
 // dibujar_texto("hola mundo", 0, 0, 14);
-pub fn dibujar_texto(eval: &mut Evaluator, args: FnParams, env: &RcEnvironment) -> ResultObj {
+pub fn dibujar_texto(
+    eval: &mut Evaluator,
+    args: FnParams,
+    env: &RcEnvironment,
+    line: usize,
+    col: usize,
+) -> ResultObj {
     if args.len() < 4 || args.len() > 5 {
-        return ResultObj::Copy(Object::Error(format!(
-            "Se encontro {} argumentos de 4 o 5",
-            args.len()
-        )));
+        return missmatch_args(4, args.len(), "dibujar_texto".len(), line, col);
     }
+
     let text_obj = eval.eval_expression(args.get(0).unwrap(), env);
     let pos_x_obj = eval.eval_expression(args.get(1).unwrap(), env);
     let pos_y_obj = eval.eval_expression(args.get(2).unwrap(), env);
@@ -169,21 +774,13 @@ pub fn dibujar_texto(eval: &mut Evaluator, args: FnParams, env: &RcEnvironment) 
 
     match text_obj {
         ResultObj::Copy(obj) => {
-            return ResultObj::Copy(Object::Error(format!(
-                "Se espera un tipo de dato cadena, no {}",
-                obj.get_type()
-            )))
+            return missmatch_type_arg("dibujar_texto", &obj.get_type(), line, col)
         }
         ResultObj::Ref(obj) => match &*obj.borrow() {
             Object::String(string) => {
                 text = string.clone();
             }
-            obj => {
-                return ResultObj::Copy(Object::Error(format!(
-                    "Se espera un tipo de dato cadena, no {}",
-                    obj.get_type()
-                )))
-            }
+            obj => return missmatch_type_arg("cadena", &obj.get_type(), line, col),
         },
     };
 
@@ -200,9 +797,11 @@ pub fn dibujar_texto(eval: &mut Evaluator, args: FnParams, env: &RcEnvironment) 
             color = set_alpha_on_u32(extract_u32_from_numeric(color_num));
         }
         _ => {
-            return ResultObj::Copy(Object::Error(
-                "Se espera un tipo de dato numerico".to_string(),
-            ))
+            return ResultObj::Copy(Object::Error(create_msg_err(
+                "Se debe ser un tipo de dato numerico".into(),
+                line,
+                col,
+            )))
         }
     };
 
@@ -221,12 +820,15 @@ pub fn dibujar_texto(eval: &mut Evaluator, args: FnParams, env: &RcEnvironment) 
 }
 
 // dibujar_linea(0, 0, 50, 50);
-pub fn dibujar_linea(eval: &mut Evaluator, args: FnParams, env: &RcEnvironment) -> ResultObj {
+pub fn dibujar_linea(
+    eval: &mut Evaluator,
+    args: FnParams,
+    env: &RcEnvironment,
+    line: usize,
+    col: usize,
+) -> ResultObj {
     if args.len() < 4 || args.len() > 5 {
-        return ResultObj::Copy(Object::Error(format!(
-            "Se encontro {} argumentos de 4 o 5",
-            args.len()
-        )));
+        return missmatch_args(4, args.len(), "dibujar_linea".len(), line, col);
     }
 
     let pos1_x_obj = eval.eval_expression(args.get(0).unwrap(), env);
@@ -260,9 +862,11 @@ pub fn dibujar_linea(eval: &mut Evaluator, args: FnParams, env: &RcEnvironment) 
             color = set_alpha_on_u32(extract_u32_from_numeric(color_num));
         }
         _ => {
-            return ResultObj::Copy(Object::Error(
-                "Se espera un tipo de dato numerico".to_string(),
-            ))
+            return ResultObj::Copy(Object::Error(create_msg_err(
+                "Se espera un tipo de dato numerico".into(),
+                line,
+                col,
+            )))
         }
     }
 
@@ -283,12 +887,15 @@ pub fn dibujar_linea(eval: &mut Evaluator, args: FnParams, env: &RcEnvironment) 
 }
 
 // dibujar_rectangulo(0, 0, 100, 100)
-pub fn dibujar_rectangulo(eval: &mut Evaluator, args: FnParams, env: &RcEnvironment) -> ResultObj {
+pub fn dibujar_rectangulo(
+    eval: &mut Evaluator,
+    args: FnParams,
+    env: &RcEnvironment,
+    line: usize,
+    col: usize,
+) -> ResultObj {
     if args.len() < 4 || args.len() > 5 {
-        return ResultObj::Copy(Object::Error(format!(
-            "Se encontro {} argumentos de 4 o 5",
-            args.len()
-        )));
+        return missmatch_args(4, args.len(), "dibujar_rectangulo".len(), line, col);
     }
 
     let pos1_x_obj = eval.eval_expression(args.get(0).unwrap(), env);
@@ -323,9 +930,11 @@ pub fn dibujar_rectangulo(eval: &mut Evaluator, args: FnParams, env: &RcEnvironm
             color = set_alpha_on_u32(extract_u32_from_numeric(color_num));
         }
         _ => {
-            return ResultObj::Copy(Object::Error(
-                "Se espera un tipo de dato numerico".to_string(),
-            ))
+            return ResultObj::Copy(Object::Error(create_msg_err(
+                "Se espera un tipo de dato numerico".into(),
+                line,
+                col,
+            )))
         }
     }
 
@@ -344,12 +953,15 @@ pub fn dibujar_rectangulo(eval: &mut Evaluator, args: FnParams, env: &RcEnvironm
 }
 
 // dibujar_circulo(0, 0, 40, 0xff0000)
-pub fn dibujar_circulo(eval: &mut Evaluator, args: FnParams, env: &RcEnvironment) -> ResultObj {
+pub fn dibujar_circulo(
+    eval: &mut Evaluator,
+    args: FnParams,
+    env: &RcEnvironment,
+    line: usize,
+    col: usize,
+) -> ResultObj {
     if args.len() < 3 || args.len() > 4 {
-        return ResultObj::Copy(Object::Error(format!(
-            "Se encontro {} argumentos de 3 o 4",
-            args.len()
-        )));
+        return missmatch_args(3, args.len(), "dibujar_circulo".len(), line, col);
     }
 
     let pos_x_obj = eval.eval_expression(args.get(0).unwrap(), env);
@@ -379,9 +991,11 @@ pub fn dibujar_circulo(eval: &mut Evaluator, args: FnParams, env: &RcEnvironment
             color = set_alpha_on_u32(extract_u32_from_numeric(color_num));
         }
         _ => {
-            return ResultObj::Copy(Object::Error(
-                "Se espera un tipo de dato numerico".to_string(),
-            ))
+            return ResultObj::Copy(Object::Error(create_msg_err(
+                "Se espera un tipo de dato numerico".into(),
+                line,
+                col,
+            )))
         }
     }
 
@@ -396,63 +1010,29 @@ pub fn dibujar_circulo(eval: &mut Evaluator, args: FnParams, env: &RcEnvironment
     ResultObj::Copy(Object::Void)
 }
 
-// aleatorio(0, 100) -> [0, 100]
-pub fn aleatorio(eval: &mut Evaluator, args: FnParams, env: &RcEnvironment) -> ResultObj {
-    if args.len() != 2 {
-        return ResultObj::Copy(Object::Error(format!(
-            "Se encontro {} argumentos de 2",
-            args.len()
-        )));
-    }
-    let min_obj = eval.eval_expression(args.get(0).unwrap(), env);
-    let max_obj = eval.eval_expression(args.get(1).unwrap(), env);
-
-    match (min_obj, max_obj) {
-        (ResultObj::Copy(Object::Numeric(min_num)), ResultObj::Copy(Object::Numeric(max_num))) => {
-            let mut rng = Rng::new(
-                std::time::SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs(),
-            );
-            match (min_num, max_num) {
-                (Numeric::Int(a), Numeric::Int(b)) => {
-                    ResultObj::Copy(Object::Numeric(Numeric::Int(rng.rand_range_i64(a, b))))
-                }
-                (Numeric::Int(a), Numeric::Float(b)) => ResultObj::Copy(Object::Numeric(
-                    Numeric::Int(rng.rand_range_i64(a, b as i64)),
-                )),
-                (Numeric::Float(a), Numeric::Int(b)) => ResultObj::Copy(Object::Numeric(
-                    Numeric::Int(rng.rand_range_i64(a as i64, b)),
-                )),
-                (Numeric::Float(a), Numeric::Float(b)) => ResultObj::Copy(Object::Numeric(
-                    Numeric::Int(rng.rand_range_i64(a as i64, b as i64)),
-                )),
-            }
-        }
-        _ => ResultObj::Copy(Object::Error(
-            "Se espera un tipo de dato numerico".to_string(),
-        )),
-    }
-}
-
-pub fn lienzo_ancho(eval: &mut Evaluator, args: FnParams, _env: &RcEnvironment) -> ResultObj {
+pub fn lienzo_ancho(
+    eval: &mut Evaluator,
+    args: FnParams,
+    _env: &RcEnvironment,
+    line: usize,
+    col: usize,
+) -> ResultObj {
     if !args.is_empty() {
-        return ResultObj::Copy(Object::Error(format!(
-            "Se encontro {} argumentos de 0",
-            args.len()
-        )));
+        return missmatch_args(0, args.len(), "lienzo_ancho".len(), line, col);
     }
 
     ResultObj::Copy(Object::Numeric(Numeric::Float(eval.canvas.width as f64)))
 }
 
-pub fn lienzo_altura(eval: &mut Evaluator, args: FnParams, _env: &RcEnvironment) -> ResultObj {
+pub fn lienzo_altura(
+    eval: &mut Evaluator,
+    args: FnParams,
+    _env: &RcEnvironment,
+    line: usize,
+    col: usize,
+) -> ResultObj {
     if !args.is_empty() {
-        return ResultObj::Copy(Object::Error(format!(
-            "Se encontro {} argumentos de 0",
-            args.len()
-        )));
+        return missmatch_args(0, args.len(), "lienzo_altura".len(), line, col);
     }
 
     ResultObj::Copy(Object::Numeric(Numeric::Float(eval.canvas.height as f64)))

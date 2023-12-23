@@ -35,9 +35,12 @@ pub struct FnObj {
 pub struct BuildinFnObj {
     pub name: String,
     pub func: Box<dyn InternalFnPointer>,
+    pub line: usize,
+    pub col: usize,
 }
 
 #[derive(Clone)]
+#[repr(u8)]
 pub enum Object {
     Numeric(Numeric),
     Boolean(bool),
@@ -161,6 +164,7 @@ Int, Bool, Null, String, Error, Return y Void. O retornar una referencia
 a un objeto como: List, Dictionary.
 */
 #[derive(Clone)]
+#[repr(u8)]
 pub enum ResultObj {
     Copy(Object),
     Ref(RcObject),

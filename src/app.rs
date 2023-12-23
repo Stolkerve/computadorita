@@ -17,9 +17,13 @@ enum Views {
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)]
 pub struct App {
+    #[serde(skip)]
     code: String,
+    #[serde(skip)]
     view: Views,
+    #[serde(skip)]
     first_run: bool,
+    #[serde(skip)]
     show_manual: bool,
     #[serde(skip)]
     loop_fn: pana_lang::parser::statement::BlockStatement,
@@ -103,6 +107,7 @@ impl App {
                     .color(Color32::RED)
                     .font(FontId::proportional(20.0)),
             );
+            return;
         }
         ctx.request_repaint_after(Duration::from_millis(16)); //60fps
         let (response, painter) = ui.allocate_painter(ui.available_size(), Sense::drag());

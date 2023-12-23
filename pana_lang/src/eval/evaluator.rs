@@ -6,8 +6,10 @@ use std::{
 
 use crate::buildins::{
     internal::{
-        aleatorio, cadena, dibujar_circulo, dibujar_linea, dibujar_rectangulo, dibujar_texto,
-        lienzo_altura, lienzo_ancho, longitud, tipo, InternalFnPointer,
+        abs, acos, acosh, asen, asenh, atan, atan2, atanh, cadena, cos, cosh, dibujar_circulo,
+        dibujar_linea, dibujar_rectangulo, dibujar_texto, exp, lienzo_altura, lienzo_ancho, log,
+        log10, longitud, max, min, piso, pot, raiz, redondear, sen, senh, tan, tanh, techo, tipo,
+        InternalFnPointer,
     },
     member::match_member_fn,
 };
@@ -79,13 +81,109 @@ impl Evaluator {
                     "lienzo_altura".to_owned(),
                     Box::new(lienzo_altura) as Box<dyn InternalFnPointer>,
                 ),
-                (
-                    "aleatorio".to_owned(),
-                    Box::new(aleatorio) as Box<dyn InternalFnPointer>,
-                ),
+                // (
+                //     "aleatorio".to_owned(),
+                //     Box::new(aleatorio) as Box<dyn InternalFnPointer>,
+                // ),
                 (
                     "cadena".to_owned(),
                     Box::new(cadena) as Box<dyn InternalFnPointer>,
+                ),
+                (
+                    "abs".to_owned(),
+                    Box::new(abs) as Box<dyn InternalFnPointer>,
+                ),
+                (
+                    "acos".to_owned(),
+                    Box::new(acos) as Box<dyn InternalFnPointer>,
+                ),
+                (
+                    "acosh".to_owned(),
+                    Box::new(acosh) as Box<dyn InternalFnPointer>,
+                ),
+                (
+                    "cos".to_owned(),
+                    Box::new(cos) as Box<dyn InternalFnPointer>,
+                ),
+                (
+                    "asen".to_owned(),
+                    Box::new(asen) as Box<dyn InternalFnPointer>,
+                ),
+                (
+                    "asenh".to_owned(),
+                    Box::new(asenh) as Box<dyn InternalFnPointer>,
+                ),
+                (
+                    "atan".to_owned(),
+                    Box::new(atan) as Box<dyn InternalFnPointer>,
+                ),
+                (
+                    "atanh".to_owned(),
+                    Box::new(atanh) as Box<dyn InternalFnPointer>,
+                ),
+                (
+                    "atan2".to_owned(),
+                    Box::new(atan2) as Box<dyn InternalFnPointer>,
+                ),
+                (
+                    "cosh".to_owned(),
+                    Box::new(cosh) as Box<dyn InternalFnPointer>,
+                ),
+                (
+                    "exp".to_owned(),
+                    Box::new(exp) as Box<dyn InternalFnPointer>,
+                ),
+                (
+                    "log".to_owned(),
+                    Box::new(log) as Box<dyn InternalFnPointer>,
+                ),
+                (
+                    "log10".to_owned(),
+                    Box::new(log10) as Box<dyn InternalFnPointer>,
+                ),
+                (
+                    "max".to_owned(),
+                    Box::new(max) as Box<dyn InternalFnPointer>,
+                ),
+                (
+                    "min".to_owned(),
+                    Box::new(min) as Box<dyn InternalFnPointer>,
+                ),
+                (
+                    "piso".to_owned(),
+                    Box::new(piso) as Box<dyn InternalFnPointer>,
+                ),
+                (
+                    "pot".to_owned(),
+                    Box::new(pot) as Box<dyn InternalFnPointer>,
+                ),
+                (
+                    "raiz".to_owned(),
+                    Box::new(raiz) as Box<dyn InternalFnPointer>,
+                ),
+                (
+                    "redondear".to_owned(),
+                    Box::new(redondear) as Box<dyn InternalFnPointer>,
+                ),
+                (
+                    "sen".to_owned(),
+                    Box::new(sen) as Box<dyn InternalFnPointer>,
+                ),
+                (
+                    "senh".to_owned(),
+                    Box::new(senh) as Box<dyn InternalFnPointer>,
+                ),
+                (
+                    "tan".to_owned(),
+                    Box::new(tan) as Box<dyn InternalFnPointer>,
+                ),
+                (
+                    "tanh".to_owned(),
+                    Box::new(tanh) as Box<dyn InternalFnPointer>,
+                ),
+                (
+                    "techo".to_owned(),
+                    Box::new(techo) as Box<dyn InternalFnPointer>,
                 ),
             ]),
             stack_ctx: VecDeque::new(),
@@ -702,6 +800,8 @@ impl Evaluator {
                     return ResultObj::Copy(Object::BuildinFn(Box::new(BuildinFnObj {
                         name: ident.clone(),
                         func: func.clone_box(),
+                        line,
+                        col,
                     })));
                 }
                 ResultObj::Copy(Object::Error(create_msg_err(
@@ -741,7 +841,7 @@ impl Evaluator {
             ),
             ResultObj::Copy(Object::BuildinFn(f)) => {
                 let func = f.func;
-                func(self, arguments.clone(), env)
+                func(self, arguments.clone(), env, f.line, f.col)
             }
             // TODO(Retornar errores previo)
             _ => ResultObj::Copy(Object::Error(create_msg_err(
