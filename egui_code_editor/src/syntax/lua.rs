@@ -10,19 +10,13 @@ impl Syntax {
             comment: "--",
             comment_multiline: ["--[[", "]]"],
             keywords: HashSet::from([
-                "and", "break", "do", "else", "elseif", "end", "for", "function", "if",
-                "in", "local","not", "or", "repeat", "return", "then", "until",
-                "while",
+                "and", "break", "do", "else", "elseif", "end", "for", "function", "if", "in",
+                "local", "not", "or", "repeat", "return", "then", "until", "while",
             ]),
             types: HashSet::from([
-                "boolean", "number", "string", "function", "userdata", "thread",
-                "table",
+                "boolean", "number", "string", "function", "userdata", "thread", "table",
             ]),
-            special: HashSet::from([
-                "false",
-                "nil",
-                "true",
-            ]),
+            special: HashSet::from(["false", "nil", "true"]),
         }
     }
 }
